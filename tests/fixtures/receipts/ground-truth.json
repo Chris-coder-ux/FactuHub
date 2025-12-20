@@ -1,0 +1,45 @@
+[
+  {
+    "filename": "receipt-001.jpg",
+    "expected": {
+      "merchant": "MERCADONA",
+      "date": "2024-01-15",
+      "total": 45.67,
+      "tax": 9.59,
+      "items": [
+        {
+          "description": "Leche entera",
+          "quantity": 2,
+          "price": 0.95,
+          "total": 1.90
+        },
+        {
+          "description": "Pan de molde",
+          "quantity": 1,
+          "price": 1.20,
+          "total": 1.20
+        }
+      ],
+      "confidence": 85
+    }
+  },
+  {
+    "filename": "receipt-002.jpg",
+    "expected": {
+      "merchant": "EL CORTE INGLES",
+      "date": "2024-02-20",
+      "total": 129.99,
+      "tax": 27.30,
+      "items": [
+        {
+          "description": "Camiseta",
+          "quantity": 1,
+          "price": 29.99,
+          "total": 29.99
+        }
+      ],
+      "confidence": 88
+    }
+  }
+]
+
