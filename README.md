@@ -56,8 +56,8 @@ Una plataforma completa de facturación web construida con Next.js, TypeScript, 
 
 1. Clona el repositorio:
    ```bash
-   git clone https://github.com/tu-usuario/invoicing-app.git
-   cd invoicing-app
+   git clone https://github.com/Chris-coder-ux/FactuHub.git
+   cd FactuHub
    ```
 
 2. Instala dependencias:
