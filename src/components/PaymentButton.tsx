@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { logger } from '@/lib/logger';
 
 interface PaymentButtonProps {
   invoiceId: string;
@@ -24,13 +25,13 @@ export default function PaymentButton({ invoiceId, amount }: PaymentButtonProps)
 
       if (response.ok) {
         const { paymentId } = await response.json();
-        console.log('Pago iniciado con ID:', paymentId);
+        logger.info('Payment initiated', { paymentId, invoiceId });
         alert('Pago procesado correctamente');
       } else {
         throw new Error('Error al procesar el pago');
       }
     } catch (error) {
-      console.error('Error al procesar el pago:', error);
+      logger.error('Payment processing error', { error, invoiceId, amount });
       alert('Error al procesar el pago');
     }
 

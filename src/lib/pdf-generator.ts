@@ -3,7 +3,8 @@ import 'jspdf-autotable';
 import { Invoice, Settings } from '@/types';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import * as qrcode from 'qrcode';
+import { toDataURL } from 'qrcode';
+import { logger } from '@/lib/logger';
 
 // Extend jsPDF with autotable types
 interface JsPDFWithAutoTable extends jsPDF {
@@ -191,7 +192,7 @@ export const generateInvoicePDF = async (invoice: Invoice, settings: Settings | 
         urlVerificacion: `${process.env.NEXT_PUBLIC_APP_URL || 'https://app.example.com'}/verify/${invoice._id}`
       };
 
-      const qrDataURL = await qrcode.toDataURL(JSON.stringify(qrData), {
+      const qrDataURL = await toDataURL(JSON.stringify(qrData), {
         width: 120,
         margin: 1,
         color: {
@@ -209,7 +210,7 @@ export const generateInvoicePDF = async (invoice: Invoice, settings: Settings | 
       doc.text('Código QR VeriFactu', 20, doc.internal.pageSize.getHeight() - 15);
       doc.text('AEAT España', 20, doc.internal.pageSize.getHeight() - 10);
     } catch (error) {
-      console.warn('Failed to generate VeriFactu QR code:', error);
+      logger.warn('Failed to generate VeriFactu QR code', error);
     }
   }
 

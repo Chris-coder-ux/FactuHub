@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { fetcher } from '@/lib/fetcher';
 import { MatchingSuggestions } from './MatchingSuggestions';
 import { BankAccount, MatchingSuggestion } from '@/types';
-import { RefreshCw, TrendingUp, AlertCircle, CheckCircle, Calculator } from 'lucide-react';
+import { RefreshCw, TrendingUp, AlertCircle, CheckCircle, Calculator, Download, FileText, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
@@ -217,6 +217,45 @@ export function ReconciliationDashboard({ bankAccounts }: ReconciliationDashboar
           </CardContent>
         </Card>
       )}
+
+      {/* Export Reports */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Exportar Reportes</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                const params = new URLSearchParams();
+                params.set('format', 'pdf');
+                if (selectedAccount !== 'all') params.set('bankAccountId', selectedAccount);
+                if (periodStart) params.set('startDate', periodStart);
+                if (periodEnd) params.set('endDate', periodEnd);
+                window.open(`/api/banking/reconciliation/export?${params.toString()}`, '_blank');
+              }}
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              Exportar PDF
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                const params = new URLSearchParams();
+                params.set('format', 'excel');
+                if (selectedAccount !== 'all') params.set('bankAccountId', selectedAccount);
+                if (periodStart) params.set('startDate', periodStart);
+                if (periodEnd) params.set('endDate', periodEnd);
+                window.open(`/api/banking/reconciliation/export?${params.toString()}`, '_blank');
+              }}
+            >
+              <FileSpreadsheet className="h-4 w-4 mr-2" />
+              Exportar Excel
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Matching Suggestions */}
       <div>

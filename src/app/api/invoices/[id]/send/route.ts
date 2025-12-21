@@ -30,8 +30,37 @@ export async function POST(
     // Generate PDF URL
     const pdfUrl = `${process.env.NEXTAUTH_URL}/api/invoices/${params.id}/pdf`;
 
-    // Create email content
-    const emailHtml = `
+    // Check for email template
+    let emailSubject = `Invoice ${invoice.invoiceNumber}`;
+    let emailHtml = '';
+    
+    try {
+      const { TemplateService } = await import('@/lib/services/template-service');
+      const companyId = invoice.companyId?.toString() || '';
+      if (companyId) {
+        const emailTemplate = await TemplateService.getDefaultTemplate(companyId, 'email');
+        
+        if (emailTemplate && emailTemplate.emailTemplate) {
+          // Render template with variables
+          const rendered = TemplateService.renderEmailTemplate(emailTemplate, {
+            invoiceNumber: invoice.invoiceNumber,
+            clientName: invoice.client.name,
+            total: invoice.total.toFixed(2),
+            dueDate: new Date(invoice.dueDate).toLocaleDateString('es-ES'),
+            status: invoice.status,
+          });
+          emailSubject = rendered.subject;
+          emailHtml = rendered.body;
+        }
+      }
+    } catch (templateError) {
+      // Fallback to default if template fails
+      console.error('Error loading email template', templateError);
+    }
+    
+    // Use default template if no custom template was loaded
+    if (!emailHtml) {
+      emailHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: #f8f9fa; padding: 20px; border-radius: 8px;">
           <h2 style="color: #333; margin-bottom: 20px;">Invoice ${invoice.invoiceNumber}</h2>
@@ -93,6 +122,7 @@ export async function POST(
         </div>
       </div>
     `;
+    }
 
     // Generate PDF content
     const pdfResponse = await fetch(pdfUrl);
@@ -102,7 +132,7 @@ export async function POST(
     const msg = {
       to: invoice.client.email,
       from: process.env.SENDGRID_FROM_EMAIL || 'noreply@yourcompany.com',
-      subject: `Invoice ${invoice.invoiceNumber}`,
+      subject: emailSubject,
       html: emailHtml,
       attachments: [
         {

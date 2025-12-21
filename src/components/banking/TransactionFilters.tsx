@@ -3,10 +3,11 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Search, Filter, X, Calendar } from 'lucide-react';
+import { Search, Filter, X } from 'lucide-react';
 import { BankAccount } from '@/types';
 
 interface TransactionFiltersProps {
@@ -108,12 +109,12 @@ export function TransactionFilters({ bankAccounts, onFilterChange, initialFilter
 
               {/* Reconciled Status Filter */}
               <div>
-                <label className="text-sm font-medium mb-2 block">Estado de Conciliación</label>
+                <Label id="filter-reconciled-label" className="text-sm font-medium mb-2 block">Estado de Conciliación</Label>
                 <Select
                   value={filters.reconciled || 'all'}
                   onValueChange={(value) => handleFilterChange('reconciled', value === 'all' ? undefined : value)}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger aria-labelledby="filter-reconciled-label" id="filter-reconciled">
                     <SelectValue placeholder="Todos" />
                   </SelectTrigger>
                   <SelectContent>
@@ -126,8 +127,9 @@ export function TransactionFilters({ bankAccounts, onFilterChange, initialFilter
 
               {/* Date Range */}
               <div>
-                <label className="text-sm font-medium mb-2 block">Fecha Desde</label>
+                <Label htmlFor="filter-start-date" className="text-sm font-medium mb-2 block">Fecha Desde</Label>
                 <Input
+                  id="filter-start-date"
                   type="date"
                   value={filters.startDate || ''}
                   onChange={(e) => handleFilterChange('startDate', e.target.value)}
@@ -135,8 +137,9 @@ export function TransactionFilters({ bankAccounts, onFilterChange, initialFilter
               </div>
 
               <div>
-                <label className="text-sm font-medium mb-2 block">Fecha Hasta</label>
+                <Label htmlFor="filter-end-date" className="text-sm font-medium mb-2 block">Fecha Hasta</Label>
                 <Input
+                  id="filter-end-date"
                   type="date"
                   value={filters.endDate || ''}
                   onChange={(e) => handleFilterChange('endDate', e.target.value)}
@@ -145,8 +148,9 @@ export function TransactionFilters({ bankAccounts, onFilterChange, initialFilter
 
               {/* Amount Range */}
               <div>
-                <label className="text-sm font-medium mb-2 block">Monto Mínimo (€)</label>
+                <Label htmlFor="filter-min-amount" className="text-sm font-medium mb-2 block">Monto Mínimo (€)</Label>
                 <Input
+                  id="filter-min-amount"
                   type="number"
                   step="0.01"
                   placeholder="0.00"
@@ -156,8 +160,9 @@ export function TransactionFilters({ bankAccounts, onFilterChange, initialFilter
               </div>
 
               <div>
-                <label className="text-sm font-medium mb-2 block">Monto Máximo (€)</label>
+                <Label htmlFor="filter-max-amount" className="text-sm font-medium mb-2 block">Monto Máximo (€)</Label>
                 <Input
+                  id="filter-max-amount"
                   type="number"
                   step="0.01"
                   placeholder="0.00"

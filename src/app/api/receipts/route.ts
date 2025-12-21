@@ -53,6 +53,7 @@ export async function GET(request: NextRequest) {
 
   } catch (error: any) {
     console.error('Error fetching receipts:', error);
+    console.error('Error stack:', error.stack);
     
     // Handle permission errors
     const { isPermissionError, handlePermissionError } = await import('@/lib/api-error-handler');
@@ -60,8 +61,13 @@ export async function GET(request: NextRequest) {
       return handlePermissionError(error);
     }
     
+    // Return more detailed error in development
     return NextResponse.json(
-      { error: 'Failed to fetch receipts' },
+      { 
+        error: 'Failed to fetch receipts',
+        message: process.env.NODE_ENV === 'development' ? error.message : undefined,
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      },
       { status: 500 }
     );
   }

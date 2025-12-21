@@ -158,7 +158,7 @@ export function ExpenseForm({ initialData, isEditing = false, onSuccess }: Expen
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       {/* Receipt Selection */}
       <div className="space-y-2">
-        <Label>Recibos Asociados (opcional)</Label>
+        <div className="text-sm font-medium">Recibos Asociados (opcional)</div>
         <p className="text-sm text-muted-foreground">
           Selecciona uno o más recibos para asociar con este gasto. Los datos se pre-llenarán automáticamente.
         </p>

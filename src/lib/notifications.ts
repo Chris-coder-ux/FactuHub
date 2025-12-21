@@ -11,18 +11,12 @@ export const notificationService = {
   async sendOverdueNotification(invoice: Invoice, client: Client) {
     logger.info(`Sending overdue notification for invoice ${invoice.invoiceNumber} to ${client.email}`);
     
-    // Simulate email sending
-    console.log(`
-      TO: ${client.email}
-      SUBJECT: Factura Vencida: ${invoice.invoiceNumber}
-      BODY:
-      Hola ${client.name},
-      Te informamos que la factura ${invoice.invoiceNumber} con importe de ${invoice.total}€ ha vencido el día ${invoice.dueDate}.
-      Por favor, realiza el pago lo antes posible.
-      
-      Atentamente,
-      Facturaly Support
-    `);
+    // Simulate email sending (in production, use SendGrid or similar)
+    logger.info('Email notification (simulated)', {
+      to: client.email,
+      subject: `Factura Vencida: ${invoice.invoiceNumber}`,
+      invoiceNumber: invoice.invoiceNumber
+    });
 
     // In a real app, you would use Nodemailer, SendGrid, Twilio, etc.
     return true;
@@ -34,17 +28,12 @@ export const notificationService = {
   async sendPaymentConfirmation(invoice: Invoice, client: Client) {
     logger.info(`Sending payment confirmation for invoice ${invoice.invoiceNumber} to ${client.email}`);
     
-    console.log(`
-      TO: ${client.email}
-      SUBJECT: Confirmación de Pago: ${invoice.invoiceNumber}
-      BODY:
-      Hola ${client.name},
-      Hemos recibido tu pago de ${invoice.total}€ para la factura ${invoice.invoiceNumber}.
-      Gracias por tu preferencia.
-      
-      Atentamente,
-      Facturaly
-    `);
+    // Simulate email sending (in production, use SendGrid or similar)
+    logger.info('Payment confirmation email (simulated)', {
+      to: client.email,
+      subject: `Confirmación de Pago: ${invoice.invoiceNumber}`,
+      invoiceNumber: invoice.invoiceNumber
+    });
 
     return true;
   }

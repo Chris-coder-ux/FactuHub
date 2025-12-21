@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X, Home, LayoutDashboard, Users, FileText, Package, BarChart3, Settings, Receipt, CreditCard, Calculator } from 'lucide-react';
+import { Menu, X, Home, LayoutDashboard, Users, FileText, Package, BarChart3, Settings, Receipt, CreditCard, Calculator, Calendar, UserCog } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ThemeToggle } from './ThemeToggle';
@@ -29,7 +29,9 @@ export default function Navbar() {
     { href: '/products', label: 'Productos', icon: Package },
     { href: '/banking/transactions', label: 'Transacciones', icon: CreditCard },
     { href: '/banking/reconciliation', label: 'Conciliación', icon: Calculator },
+    { href: '/fiscal', label: 'Previsión Fiscal', icon: Calendar },
     { href: '/reports', label: 'Reportes', icon: BarChart3 },
+    { href: '/teams', label: 'Equipos', icon: UserCog },
     { href: '/settings', label: 'Configuración', icon: Settings },
   ];
 
@@ -94,7 +96,7 @@ export default function Navbar() {
                   {session.user?.name?.charAt(0) || 'U'}
                 </AvatarFallback>
               </Avatar>
-              <Button onClick={() => signOut()} variant="ghost" size="sm" className="hidden sm:flex">
+              <Button onClick={() => signOut({ callbackUrl: '/auth', redirect: true })} variant="ghost" size="sm" className="hidden sm:flex">
                 Salir
               </Button>
             </div>
@@ -155,7 +157,7 @@ export default function Navbar() {
 
               <div className="mt-auto pt-6 border-t">
                  {session ? (
-                   <Button onClick={() => signOut()} variant="outline" className="w-full justify-start gap-2">
+                   <Button onClick={() => signOut({ callbackUrl: '/auth', redirect: true })} variant="outline" className="w-full justify-start gap-2">
                      <span className="ml-2">Cerrar Sesión</span>
                    </Button>
                  ) : (

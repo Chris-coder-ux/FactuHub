@@ -17,34 +17,7 @@ export function ReceiptUpload({ onUploadComplete, maxFiles = 10, className }: Re
   const [uploading, setUploading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
 
-  const onDrop = useCallback(async (acceptedFiles: File[]) => {
-    if (acceptedFiles.length === 0) return;
-
-    // Validate files
-    const invalidFiles = acceptedFiles.filter(file => !file.type.startsWith('image/'));
-    if (invalidFiles.length > 0) {
-      toast.error('Solo se permiten archivos de imagen');
-      return;
-    }
-
-    const oversizedFiles = acceptedFiles.filter(file => file.size > 10 * 1024 * 1024);
-    if (oversizedFiles.length > 0) {
-      toast.error('Los archivos deben ser menores de 10MB');
-      return;
-    }
-
-    if (uploadedFiles.length + acceptedFiles.length > maxFiles) {
-      toast.error(`Máximo ${maxFiles} archivos permitidos`);
-      return;
-    }
-
-    setUploadedFiles(prev => [...prev, ...acceptedFiles]);
-
-    // Start upload
-    await uploadFiles(acceptedFiles);
-  }, [uploadedFiles, maxFiles]);
-
-  const uploadFiles = async (files: File[]) => {
+  const uploadFiles = useCallback(async (files: File[]) => {
     setUploading(true);
     const results: any[] = [];
 
@@ -79,7 +52,35 @@ export function ReceiptUpload({ onUploadComplete, maxFiles = 10, className }: Re
     setUploading(false);
     // Clear uploaded files after upload
     setUploadedFiles([]);
-  };
+  }, [onUploadComplete]);
+
+  const onDrop = useCallback(async (acceptedFiles: File[]) => {
+    if (acceptedFiles.length === 0) return;
+
+    // Validate files
+    const invalidFiles = acceptedFiles.filter(file => !file.type.startsWith('image/'));
+    if (invalidFiles.length > 0) {
+      toast.error('Solo se permiten archivos de imagen');
+      return;
+    }
+
+    const oversizedFiles = acceptedFiles.filter(file => file.size > 10 * 1024 * 1024);
+    if (oversizedFiles.length > 0) {
+      toast.error('Los archivos deben ser menores de 10MB');
+      return;
+    }
+
+    setUploadedFiles(prev => {
+      if (prev.length + acceptedFiles.length > maxFiles) {
+        toast.error(`Máximo ${maxFiles} archivos permitidos`);
+        return prev;
+      }
+      return [...prev, ...acceptedFiles];
+    });
+
+    // Start upload
+    await uploadFiles(acceptedFiles);
+  }, [maxFiles, uploadFiles]);
 
   const removeFile = (file: File) => {
     setUploadedFiles(prev => prev.filter(f => f !== file));

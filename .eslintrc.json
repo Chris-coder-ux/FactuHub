@@ -1,3 +1,99 @@
 {
-  "extends": "next/core-web-vitals"
+  "extends": "next/core-web-vitals",
+  "rules": {
+    "no-console": ["warn", { 
+      "allow": ["warn", "error"] 
+    }],
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          {
+            "name": "moment",
+            "message": "moment.js está deprecated. Usar date-fns o date-fns-tz en su lugar."
+          },
+          {
+            "name": "exceljs",
+            "message": "ExcelJS es muy pesado (~2MB). Usar dynamic() import o cargar solo cuando sea necesario."
+          },
+          {
+            "name": "jspdf",
+            "message": "jsPDF es pesado. Considerar usar dynamic() import."
+          }
+        ],
+        "patterns": [
+          {
+            "group": ["moment/*"],
+            "message": "moment.js está deprecated. Usar date-fns o date-fns-tz en su lugar."
+          }
+        ]
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": ["next.config.*", "*.config.*"],
+      "rules": {
+        "no-console": "off",
+        "no-restricted-imports": "off"
+      }
+    },
+    {
+      "files": ["**/*.test.*", "**/*.spec.*", "**/__tests__/**"],
+      "rules": {
+        "no-console": "off"
+      }
+    },
+    {
+      "files": ["**/lib/logger.ts"],
+      "rules": {
+        "no-console": "off"
+      }
+    },
+    {
+      "files": ["**/app/api/**", "**/lib/**"],
+      "env": {
+        "node": true
+      },
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    },
+    {
+      "files": ["**/examples/**", "**/examples/**/*.js"],
+      "env": {
+        "node": true,
+        "browser": true,
+        "es2021": true
+      },
+      "globals": {
+        "console": "readonly",
+        "module": "readonly",
+        "require": "readonly",
+        "window": "readonly",
+        "Blob": "readonly",
+        "setTimeout": "readonly",
+        "Promise": "readonly",
+        "Date": "readonly",
+        "Math": "readonly",
+        "Error": "readonly",
+        "Object": "readonly",
+        "Array": "readonly",
+        "String": "readonly",
+        "Number": "readonly",
+        "Boolean": "readonly",
+        "AppTrabajoSDK": "readonly"
+      },
+      "rules": {
+        "no-console": "off",
+        "no-unused-vars": "off",
+        "no-undef": "off",
+        "@typescript-eslint/no-unused-vars": "off",
+        "spaced-comment": "off",
+        "no-throw-literal": "off",
+        "no-case-declarations": "off",
+        "complexity": "off"
+      }
+    }
+  ]
 }

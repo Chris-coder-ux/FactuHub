@@ -28,6 +28,7 @@ export class OCRProcessor {
       logger: m => {
         if (m.status === 'recognizing text') {
           // Log progress quietly to avoid spam
+          // eslint-disable-next-line no-console
           console.log(`OCR Progress: ${Math.round(m.progress * 100)}%`);
         }
       }

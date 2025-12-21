@@ -6,6 +6,7 @@
 import { StorageService } from './storage-service';
 import { LocalStorage } from './local-storage';
 import { CloudinaryStorage } from './cloudinary-storage';
+import { logger } from '../logger';
 
 let storageInstance: StorageService | null = null;
 
@@ -25,10 +26,10 @@ export function getStorageService(): StorageService {
     process.env.CLOUDINARY_API_SECRET
   ) {
     storageInstance = new CloudinaryStorage();
-    console.log('✅ Using Cloudinary storage');
+    logger.info('Using Cloudinary storage');
   } else {
     storageInstance = new LocalStorage();
-    console.log('📁 Using local filesystem storage');
+    logger.info('Using local filesystem storage');
   }
 
   return storageInstance;

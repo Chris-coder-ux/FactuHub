@@ -28,6 +28,14 @@ export async function POST(
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
 
+    // Proforma invoices cannot be processed with VeriFactu
+    if (invoice.invoiceType === 'proforma') {
+      return NextResponse.json(
+        { error: 'Proforma invoices cannot be processed with VeriFactu. Proforma invoices have no fiscal validity.' },
+        { status: 400 }
+      );
+    }
+
     // Verify invoice belongs to the company
     if (invoice.companyId && invoice.companyId.toString() !== companyId) {
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
