@@ -269,10 +269,23 @@ Si prefieres desplegar en otro servidor (AWS, DigitalOcean, etc.):
 Los cron jobs están configurados en `vercel.json` y se ejecutan automáticamente en Vercel:
 
 - **Facturas recurrentes**: Diario a las 00:00 UTC
-- **Análisis de seguridad**: Cada hora
+- **Análisis de seguridad**: Diario a las 03:00 UTC (limitado por plan gratuito)
 - **Limpieza de almacenamiento**: Diario a las 02:00 UTC
 
-Si despliegas manualmente, configura estos cron jobs en tu servidor o usa un servicio como [cron-job.org](https://cron-job.org).
+**⚠️ Limitación del Plan Gratuito de Vercel**: El plan Hobby solo permite cron jobs que se ejecuten **una vez al día** como máximo. Si necesitas ejecutar el análisis de seguridad más frecuentemente (cada hora), tienes estas opciones:
+
+1. **Usar un servicio externo** (Recomendado para plan gratuito):
+   - [cron-job.org](https://cron-job.org) (gratis)
+   - [EasyCron](https://www.easycron.com) (gratis con limitaciones)
+   - Configura una llamada HTTP a: `https://tu-dominio.com/api/cron/security-analysis`
+   - Headers: `Authorization: Bearer ${CRON_SECRET}`
+   - Frecuencia: Cada hora
+
+2. **Actualizar a Vercel Pro** ($20/mes):
+   - Permite cron jobs con cualquier frecuencia
+   - Cambia el schedule en `vercel.json` a `"0 * * * *"` para ejecutar cada hora
+
+Si despliegas manualmente, configura estos cron jobs en tu servidor o usa un servicio externo.
 
 ### 3. Configurar VeriFactu (Opcional)
 

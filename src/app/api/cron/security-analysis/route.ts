@@ -3,7 +3,9 @@
  * Analyzes audit logs and creates security alerts for suspicious patterns
  * 
  * Security: Requires CRON_SECRET to be passed in Authorization header
- * Schedule: Run every hour (0 * * * *)
+ * Schedule: Run daily at 3:00 AM UTC (0 3 * * *)
+ * Note: Plan gratuito de Vercel solo permite cron jobs diarios.
+ * Para ejecutar cada hora, usar servicio externo (cron-job.org) o plan Pro.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
