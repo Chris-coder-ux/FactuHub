@@ -48,7 +48,35 @@ No necesitas cambiar nada, pero verifica que estén correctos.
 2. Espera a que el build termine (3-5 minutos)
 3. Tu app estará disponible en `https://tu-proyecto.vercel.app`
 
-### Paso 6: Configurar Dominio Personalizado (Opcional)
+### Paso 6: Monitorear el Despliegue
+
+Vercel te mostrará el progreso del despliegue en tiempo real:
+
+1. **Dashboard de Vercel**: 
+   - Ve a tu proyecto en [vercel.com/dashboard](https://vercel.com/dashboard)
+   - Verás el estado del despliegue: "Building" → "Deploying" → "Ready" ✅
+
+2. **Indicadores de Estado**:
+   - 🟡 **Building**: Compilando la aplicación (2-5 minutos)
+   - 🟡 **Deploying**: Desplegando en producción
+   - 🟢 **Ready**: Despliegue completado exitosamente
+   - 🔴 **Error**: Hubo un error (revisa los logs)
+
+3. **Logs en Tiempo Real**:
+   - Haz clic en el despliegue para ver los logs
+   - Verás el progreso del build, instalación de dependencias, etc.
+   - Si hay errores, aparecerán aquí con detalles
+
+4. **Notificaciones**:
+   - Vercel te enviará un email cuando el despliegue termine
+   - También puedes configurar notificaciones en Slack/Discord
+
+5. **Verificar que Funciona**:
+   - Una vez que diga "Ready", visita tu URL: `https://tu-proyecto.vercel.app`
+   - Deberías ver la aplicación funcionando
+   - Si hay errores, revisa los logs en Vercel
+
+### Paso 7: Configurar Dominio Personalizado (Opcional)
 
 1. Ve a **Settings > Domains**
 2. Agrega tu dominio personalizado
@@ -255,7 +283,26 @@ Si prefieres desplegar en otro servidor (AWS, DigitalOcean, etc.):
 
 ## ✅ Post-Despliegue
 
-### 1. Verificar Funcionalidad
+### 1. Verificar que el Despliegue Terminó
+
+**En el Dashboard de Vercel:**
+- ✅ Estado muestra "Ready" (verde)
+- ✅ URL de producción está disponible
+- ✅ No hay errores en los logs
+- ✅ Tiempo de build completado (no está en "Building")
+
+**Verificar la Aplicación:**
+- Visita `https://tu-proyecto.vercel.app`
+- La página carga correctamente
+- No hay errores en la consola del navegador
+- La aplicación responde a las interacciones
+
+**Si el Despliegue Falla:**
+- Revisa los logs en Vercel (haz clic en el despliegue)
+- Busca errores de compilación, variables de entorno faltantes, etc.
+- Corrige los errores y haz push nuevamente (se desplegará automáticamente)
+
+### 2. Verificar Funcionalidad
 
 - [ ] Acceder a la URL de producción
 - [ ] Crear una cuenta de prueba
