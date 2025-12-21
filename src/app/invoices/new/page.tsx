@@ -2,11 +2,11 @@
 
 import { InvoiceForm } from '@/components/forms/InvoiceForm';
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import useSWR from 'swr';
 import { fetcher } from '@/lib/fetcher';
 
-export default function NewInvoicePage() {
+function NewInvoiceContent() {
   const searchParams = useSearchParams();
   const templateId = searchParams.get('template');
   const [templateData, setTemplateData] = useState<any>(null);
@@ -26,5 +26,20 @@ export default function NewInvoicePage() {
     <div className="container mx-auto py-10">
       <InvoiceForm templateData={templateData} />
     </div>
+  );
+}
+
+export default function NewInvoicePage() {
+  return (
+    <Suspense fallback={
+      <div className="container mx-auto py-10">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
+          <div className="h-64 bg-gray-200 rounded"></div>
+        </div>
+      </div>
+    }>
+      <NewInvoiceContent />
+    </Suspense>
   );
 }

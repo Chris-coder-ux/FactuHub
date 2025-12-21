@@ -44,6 +44,32 @@ const categoryConfig = {
   other: 'Otro',
 };
 
+interface SupportTicket {
+  _id: string;
+  ticketNumber: string;
+  subject: string;
+  description: string;
+  category: 'technical' | 'billing' | 'feature' | 'bug' | 'other';
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  status: 'open' | 'in-progress' | 'resolved' | 'closed';
+  messages?: Array<{
+    userId: string | { _id: string; name: string; email: string };
+    message: string;
+    attachments?: string[];
+    createdAt: Date;
+  }>;
+  createdAt: Date;
+  updatedAt?: Date;
+}
+
+interface SupportTicketsResponse {
+  data: SupportTicket[];
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
 export function SupportTicketsList() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -52,7 +78,7 @@ export function SupportTicketsList() {
   if (statusFilter !== 'all') queryParams.set('status', statusFilter);
   if (categoryFilter !== 'all') queryParams.set('category', categoryFilter);
 
-  const { data, error, isLoading, mutate } = useSWR(
+  const { data, error, isLoading, mutate } = useSWR<SupportTicketsResponse>(
     `/api/support/tickets?${queryParams.toString()}`,
     fetcher
   );
@@ -130,7 +156,7 @@ export function SupportTicketsList() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {tickets.map((ticket: any) => {
+          {tickets.map((ticket: SupportTicket) => {
             const StatusIcon = statusConfig[ticket.status as keyof typeof statusConfig]?.icon || MessageSquare;
             const statusInfo = statusConfig[ticket.status as keyof typeof statusConfig];
             const priorityInfo = priorityConfig[ticket.priority as keyof typeof priorityConfig];

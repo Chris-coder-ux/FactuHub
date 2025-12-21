@@ -40,6 +40,16 @@ const settingsSchema = new Schema<Settings>({
    securityAnalysisEnabled: { type: Boolean, default: true },
    securityAnalysisFrequency: { type: String, enum: ['15min', '30min', '1hour', '2hours', '6hours', '12hours', '24hours'], default: '1hour' },
    securityAnalysisLastRun: { type: Date },
+   
+   // Email configuration
+   emailFromAddress: { type: String }, // Email remitente (sobrescribe SENDGRID_FROM_EMAIL)
+   emailFromName: { type: String }, // Nombre del remitente
+   emailNotificationsEnabled: { type: Boolean, default: true }, // Habilitar notificaciones automáticas
+   emailInvoiceEnabled: { type: Boolean, default: true }, // Permitir envío de facturas por email
+   emailOverdueEnabled: { type: Boolean, default: true }, // Notificaciones de facturas vencidas
+   emailPaymentEnabled: { type: Boolean, default: true }, // Confirmaciones de pago
+   emailTeamInvitesEnabled: { type: Boolean, default: true }, // Invitaciones a equipos
+   emailFiscalRemindersEnabled: { type: Boolean, default: true }, // Recordatorios fiscales
 }, {
   timestamps: true,
 });

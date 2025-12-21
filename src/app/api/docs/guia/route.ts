@@ -1,12 +1,12 @@
 /* eslint-env node */
+/* global process */
 import { NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
-import path from 'path';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
 import { logger } from '@/lib/logger';
 
 export async function GET() {
   try {
-    // eslint-disable-next-line no-undef
     const filePath = path.join(process.cwd(), 'docs', 'api', 'GUIA_COMPLETA.md');
     const content = await fs.readFile(filePath, 'utf-8');
     return new NextResponse(content, {

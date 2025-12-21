@@ -40,12 +40,18 @@ export async function GET(request: NextRequest) {
 
     const notificationResults = [];
     for (const invoice of overdueInvoices) {
-      if (invoice.client?.email) {
-        await notificationService.sendOverdueNotification(invoice, invoice.client);
+      if (invoice.client?.email && invoice.companyId) {
+        const companyId = invoice.companyId.toString();
+        const success = await notificationService.sendOverdueNotification(
+          invoice,
+          invoice.client,
+          companyId
+        );
         notificationResults.push({
           invoiceNumber: invoice.invoiceNumber,
           client: invoice.client.name,
-          email: invoice.client.email
+          email: invoice.client.email,
+          sent: success,
         });
       }
     }
@@ -66,3 +72,6 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
+// Force dynamic rendering since this route uses request.headers
+export const dynamic = 'force-dynamic';

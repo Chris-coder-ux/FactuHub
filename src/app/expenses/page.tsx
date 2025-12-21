@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { fetcher } from '@/lib/fetcher';
 import { toast } from 'sonner';
 import { EmptyState } from '@/components/EmptyState';
-import { Search, Receipt, Eye, Edit, Trash2, Plus, CheckCircle, XCircle, Clock, Filter, Download, FileText, BarChart3 } from 'lucide-react';
+import { Search, Receipt, Edit, Trash2, Plus, CheckCircle, XCircle, Clock, Download, FileText, BarChart3 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import dynamic from 'next/dynamic';
 import { Expense } from '@/types';
@@ -135,29 +135,6 @@ export default function ExpensesPage() {
     mutate('/api/expenses?limit=50');
   };
 
-  const handleCreateTestExpense = async () => {
-    try {
-      const response = await fetch('/api/expenses/seed', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Error al crear gasto de prueba');
-      }
-
-      const data = await response.json();
-      toast.success('Gasto de prueba creado exitosamente');
-      mutate('/api/expenses?limit=50');
-    } catch (error: any) {
-      toast.error(error.message || 'Error al crear gasto de prueba');
-      console.error('Error:', error);
-    }
-  };
-
   const totalAmount = useMemo(() => {
     return filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0);
   }, [filteredExpenses]);
@@ -195,16 +172,6 @@ export default function ExpensesPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          {expenses.length === 0 && (
-            <Button
-              variant="outline"
-              onClick={handleCreateTestExpense}
-              className="bg-yellow-50 hover:bg-yellow-100 dark:bg-yellow-900/20 dark:hover:bg-yellow-900/30"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Crear Gasto de Prueba
-            </Button>
-          )}
           <Button
             variant="outline"
             onClick={() => {
@@ -374,8 +341,8 @@ export default function ExpensesPage() {
 
                   {expense.tags && expense.tags.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-4">
-                      {expense.tags.map((tag, idx) => (
-                        <Badge key={idx} variant="secondary" className="text-xs">
+                      {expense.tags.map((tag) => (
+                        <Badge key={tag} variant="secondary" className="text-xs">
                           {tag}
                         </Badge>
                       ))}

@@ -55,6 +55,9 @@
       "env": {
         "node": true
       },
+      "globals": {
+        "process": "readonly"
+      },
       "rules": {
         "no-restricted-imports": "off"
       }

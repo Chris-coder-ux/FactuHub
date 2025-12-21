@@ -56,7 +56,11 @@ const handleCheckoutSessionCompleted = async (session: Stripe.Checkout.Session) 
           invoiceId: invoice._id,
         });
         if (invoice.client) {
-            await notificationService.sendPaymentConfirmation(invoice, invoice.client);
+            await notificationService.sendPaymentConfirmation(
+              invoice, 
+              invoice.client, 
+              invoice.companyId?.toString() || ''
+            );
         }
         
         // Emit real-time event

@@ -30,6 +30,25 @@ const categoryLabels = {
   other: 'Otro',
 };
 
+interface FAQ {
+  _id: string;
+  question: string;
+  answer: string;
+  category: 'general' | 'billing' | 'technical' | 'verifactu' | 'ocr' | 'other';
+  tags?: string[];
+  views?: number;
+  helpful?: number;
+  notHelpful?: number;
+  isPublished?: boolean;
+  order?: number;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+interface FAQResponse {
+  data: FAQ[];
+}
+
 export function FAQList() {
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -39,7 +58,7 @@ export function FAQList() {
   if (categoryFilter !== 'all') queryParams.set('category', categoryFilter);
   if (searchQuery) queryParams.set('search', searchQuery);
 
-  const { data, error, isLoading } = useSWR(
+  const { data, error, isLoading } = useSWR<FAQResponse>(
     `/api/support/faq?${queryParams.toString()}`,
     fetcher
   );
@@ -123,7 +142,7 @@ export function FAQList() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {faqs.map((faq: any) => {
+          {faqs.map((faq: FAQ) => {
             const isExpanded = expandedItems.has(faq._id);
             return (
               <Card key={faq._id} className="hover:shadow-md transition-shadow">

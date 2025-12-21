@@ -28,14 +28,83 @@ class Logger {
     // List of keys to redact
     const sensitiveKeys = ['password', 'token', 'secret', 'apiKey', 'authorization', 'cookie'];
     
-    const sanitized = structuredClone(data);
+    // Safe clone function that handles non-cloneable objects
+    const safeClone = (obj: any, visited = new WeakSet()): any => {
+      // Handle primitives
+      if (obj === null || typeof obj !== 'object') {
+        return obj;
+      }
+
+      // Handle circular references
+      if (visited.has(obj)) {
+        return '[Circular]';
+      }
+      visited.add(obj);
+
+      // Handle Date
+      if (obj instanceof Date) {
+        return new Date(obj.getTime());
+      }
+
+      // Handle Error objects
+      if (obj instanceof Error) {
+        return {
+          name: obj.name,
+          message: obj.message,
+          stack: this.isProduction ? undefined : obj.stack,
+        };
+      }
+
+      // Handle Event objects (common in browser)
+      if (obj instanceof Event || (typeof Event !== 'undefined' && obj.constructor?.name === 'Event')) {
+        return {
+          type: obj.type,
+          target: obj.target ? String(obj.target) : undefined,
+          currentTarget: obj.currentTarget ? String(obj.currentTarget) : undefined,
+          timeStamp: obj.timeStamp,
+        };
+      }
+
+      // Handle arrays
+      if (Array.isArray(obj)) {
+        return obj.map(item => safeClone(item, visited));
+      }
+
+      // Handle objects
+      try {
+        const cloned: any = {};
+        for (const key in obj) {
+          if (Object.prototype.hasOwnProperty.call(obj, key)) {
+            try {
+              cloned[key] = safeClone(obj[key], visited);
+            } catch {
+              cloned[key] = '[Non-cloneable]';
+            }
+          }
+        }
+        return cloned;
+      } catch {
+        // Fallback: try JSON serialization
+        try {
+          return JSON.parse(JSON.stringify(obj));
+        } catch {
+          return String(obj);
+        }
+      }
+    };
+    
+    const sanitized = safeClone(data);
     
     const redact = (obj: any) => {
+      if (!obj || typeof obj !== 'object') return;
+      
       for (const key in obj) {
-        if (sensitiveKeys.some(sk => key.toLowerCase().includes(sk))) {
-          obj[key] = '[REDACTED]';
-        } else if (typeof obj[key] === 'object' && obj[key] !== null) {
-          redact(obj[key]);
+        if (Object.prototype.hasOwnProperty.call(obj, key)) {
+          if (sensitiveKeys.some(sk => key.toLowerCase().includes(sk))) {
+            obj[key] = '[REDACTED]';
+          } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+            redact(obj[key]);
+          }
         }
       }
     };

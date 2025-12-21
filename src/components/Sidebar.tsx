@@ -268,9 +268,9 @@ export default function Sidebar() {
               <AnimatePresence>
                 {((isCollapsed && isActiveGroup) || isGroupOpen || isCollapsed) && (
                   <motion.div
-                    initial={isCollapsed ? false : { height: 0, opacity: 0 }}
+                    initial={isCollapsed ? undefined : { height: 0, opacity: 0 }}
                     animate={isCollapsed ? {} : { height: 'auto', opacity: 1 }}
-                    exit={isCollapsed ? false : { height: 0, opacity: 0 }}
+                    exit={isCollapsed ? undefined : { height: 0, opacity: 0 }}
                     transition={{ duration: 0.2 }}
                     className={cn("space-y-1", isCollapsed && "space-y-1")}
                   >

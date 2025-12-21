@@ -21,7 +21,8 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Save, Building2, CreditCard, Cog, Globe, Loader2, FileCheck, Shield, Upload } from 'lucide-react';
+import { Save, Building2, CreditCard, Cog, Globe, Loader2, FileCheck, Shield, Upload, Mail, History } from 'lucide-react';
+import Link from 'next/link';
 import BankingSettings from '@/components/settings/BankingSettings';
 
 type SettingsFormData = z.infer<typeof settingsSchema> & {
@@ -34,6 +35,15 @@ type SettingsFormData = z.infer<typeof settingsSchema> & {
   verifactuAutoSend?: boolean;
   verifactuCertificatePath?: string;
   verifactuCertificatePassword?: string;
+  // Email settings
+  emailFromAddress?: string;
+  emailFromName?: string;
+  emailNotificationsEnabled?: boolean;
+  emailInvoiceEnabled?: boolean;
+  emailOverdueEnabled?: boolean;
+  emailPaymentEnabled?: boolean;
+  emailTeamInvitesEnabled?: boolean;
+  emailFiscalRemindersEnabled?: boolean;
 };
 
 export default function SettingsPage() {
@@ -67,6 +77,14 @@ export default function SettingsPage() {
       verifactuAutoSend: false,
       verifactuCertificatePath: '',
       verifactuCertificatePassword: '',
+      emailFromAddress: '',
+      emailFromName: '',
+      emailNotificationsEnabled: true,
+      emailInvoiceEnabled: true,
+      emailOverdueEnabled: true,
+      emailPaymentEnabled: true,
+      emailTeamInvitesEnabled: true,
+      emailFiscalRemindersEnabled: true,
       address: {
         street: '',
         city: '',
@@ -377,6 +395,132 @@ export default function SettingsPage() {
                 </div>
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        {/* Email Configuration */}
+        <Card className="border-none shadow-md overflow-hidden">
+          <CardHeader className="bg-muted/50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Mail className="h-5 w-5 text-primary" />
+                <CardTitle>Configuración de Emails</CardTitle>
+              </div>
+              <Link href="/settings/emails">
+                <Button variant="outline" size="sm">
+                  <History className="h-4 w-4 mr-2" />
+                  Ver Historial
+                </Button>
+              </Link>
+            </div>
+            <CardDescription>Gestiona el envío de emails y notificaciones automáticas.</CardDescription>
+          </CardHeader>
+          <CardContent className="pt-6 space-y-4">
+            {/* Email Remitente */}
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="emailFromAddress">Email Remitente</Label>
+                <Input
+                  id="emailFromAddress"
+                  {...register('emailFromAddress')}
+                  placeholder="noreply@tudominio.com"
+                  type="email"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Email desde el que se enviarán los mensajes. Si está vacío, se usará la variable de entorno SENDGRID_FROM_EMAIL.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="emailFromName">Nombre del Remitente</Label>
+                <Input
+                  id="emailFromName"
+                  {...register('emailFromName')}
+                  placeholder="FacturaHub"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Nombre que aparecerá como remitente en los emails.
+                </p>
+              </div>
+            </div>
+
+            <div className="border-t pt-4 space-y-4">
+              <div className="flex items-center justify-between p-4 border rounded-lg bg-primary/5">
+                <div className="space-y-0.5">
+                  <Label className="text-base">Notificaciones Automáticas</Label>
+                  <p className="text-sm text-muted-foreground">Habilitar/deshabilitar todas las notificaciones por email.</p>
+                </div>
+                <Switch
+                  checked={watch('emailNotificationsEnabled') ?? true}
+                  onCheckedChange={(checked: boolean) => setValue('emailNotificationsEnabled', checked)}
+                />
+              </div>
+
+              {watch('emailNotificationsEnabled') && (
+                <div className="space-y-3 pt-2 pl-4 border-l-2 animate-in fade-in slide-in-from-top-2">
+                  <div className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="space-y-0.5">
+                      <Label className="text-sm">Envío de Facturas</Label>
+                      <p className="text-xs text-muted-foreground">Permitir enviar facturas por email.</p>
+                    </div>
+                    <Switch
+                      checked={watch('emailInvoiceEnabled') ?? true}
+                      onCheckedChange={(checked: boolean) => setValue('emailInvoiceEnabled', checked)}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="space-y-0.5">
+                      <Label className="text-sm">Facturas Vencidas</Label>
+                      <p className="text-xs text-muted-foreground">Notificar cuando una factura está vencida.</p>
+                    </div>
+                    <Switch
+                      checked={watch('emailOverdueEnabled') ?? true}
+                      onCheckedChange={(checked: boolean) => setValue('emailOverdueEnabled', checked)}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="space-y-0.5">
+                      <Label className="text-sm">Confirmaciones de Pago</Label>
+                      <p className="text-xs text-muted-foreground">Enviar confirmación cuando se recibe un pago.</p>
+                    </div>
+                    <Switch
+                      checked={watch('emailPaymentEnabled') ?? true}
+                      onCheckedChange={(checked: boolean) => setValue('emailPaymentEnabled', checked)}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="space-y-0.5">
+                      <Label className="text-sm">Invitaciones a Equipos</Label>
+                      <p className="text-xs text-muted-foreground">Enviar emails al invitar miembros al equipo.</p>
+                    </div>
+                    <Switch
+                      checked={watch('emailTeamInvitesEnabled') ?? true}
+                      onCheckedChange={(checked: boolean) => setValue('emailTeamInvitesEnabled', checked)}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="space-y-0.5">
+                      <Label className="text-sm">Recordatorios Fiscales</Label>
+                      <p className="text-xs text-muted-foreground">Recordatorios de plazos fiscales por email.</p>
+                    </div>
+                    <Switch
+                      checked={watch('emailFiscalRemindersEnabled') ?? true}
+                      onCheckedChange={(checked: boolean) => setValue('emailFiscalRemindersEnabled', checked)}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="p-3 bg-blue-50 border border-blue-100 rounded text-sm text-blue-700">
+                <p className="flex items-center gap-2">
+                  <Mail className="h-4 w-4" />
+                  Asegúrate de configurar SENDGRID_API_KEY en las variables de entorno para que los emails funcionen.
+                </p>
+              </div>
+            </div>
           </CardContent>
         </Card>
 

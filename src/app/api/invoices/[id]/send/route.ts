@@ -1,25 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import Invoice from '@/lib/models/Invoice';
-import { requireAuth } from '@/lib/auth';
-import sgMail from '@sendgrid/mail';
-import { env } from '@/lib/env';
-
-if (env.SENDGRID_API_KEY) {
-  sgMail.setApiKey(env.SENDGRID_API_KEY);
-} else {
-  console.warn('SENDGRID_API_KEY is not configured. Email sending will not work.');
-}
+import { requireCompanyContext } from '@/lib/auth';
+import { emailService } from '@/lib/services/email-service';
+import { logger } from '@/lib/logger';
 
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    await requireAuth();
     await dbConnect();
+    const { session, companyId } = await requireCompanyContext();
     
-    const invoice = await Invoice.findById(params.id)
+    const invoice = await Invoice.findOne({
+      _id: params.id,
+      companyId: companyId,
+    })
       .populate('client')
       .populate('items.product');
     
@@ -55,7 +52,7 @@ export async function POST(
       }
     } catch (templateError) {
       // Fallback to default if template fails
-      console.error('Error loading email template', templateError);
+      logger.error('Error loading email template', templateError);
     }
     
     // Use default template if no custom template was loaded
@@ -129,9 +126,9 @@ export async function POST(
     const pdfBuffer = await pdfResponse.arrayBuffer();
     const pdfBase64 = Buffer.from(pdfBuffer).toString('base64');
 
-    const msg = {
+    // Use emailService to send email
+    const result = await emailService.sendEmail({
       to: invoice.client.email,
-      from: process.env.SENDGRID_FROM_EMAIL || 'noreply@yourcompany.com',
       subject: emailSubject,
       html: emailHtml,
       attachments: [
@@ -139,17 +136,31 @@ export async function POST(
           filename: `invoice-${invoice.invoiceNumber}.pdf`,
           content: pdfBase64,
           type: 'application/pdf',
-          disposition: 'attachment'
-        }
-      ]
-    };
+          disposition: 'attachment',
+        },
+      ],
+      companyId: companyId,
+      userId: session.user.id,
+      type: 'invoice',
+      metadata: {
+        invoiceId: invoice._id.toString(),
+        invoiceNumber: invoice.invoiceNumber,
+        clientId: invoice.client._id?.toString(),
+      },
+    });
 
-    await sgMail.send(msg);
+    if (!result.success) {
+      logger.error('Failed to send invoice email', { error: result.error, invoiceId: invoice._id });
+      return NextResponse.json(
+        { message: 'Error al enviar el email', error: result.error },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({ message: 'Invoice sent successfully' });
     
   } catch (error) {
-    console.error('Send invoice email error:', error);
+    logger.error('Send invoice email error', error);
     return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
   }
 }

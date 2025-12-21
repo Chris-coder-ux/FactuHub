@@ -241,6 +241,16 @@ export interface Settings {
    securityAnalysisEnabled?: boolean; // Enable/disable automated security analysis
    securityAnalysisFrequency?: '15min' | '30min' | '1hour' | '2hours' | '6hours' | '12hours' | '24hours'; // Frequency of security analysis
    securityAnalysisLastRun?: Date; // Last time security analysis was run
+   
+   // Email configuration
+   emailFromAddress?: string; // Email remitente (sobrescribe SENDGRID_FROM_EMAIL)
+   emailFromName?: string; // Nombre del remitente
+   emailNotificationsEnabled?: boolean; // Habilitar notificaciones automáticas
+   emailInvoiceEnabled?: boolean; // Permitir envío de facturas por email
+   emailOverdueEnabled?: boolean; // Notificaciones de facturas vencidas
+   emailPaymentEnabled?: boolean; // Confirmaciones de pago
+   emailTeamInvitesEnabled?: boolean; // Invitaciones a equipos
+   emailFiscalRemindersEnabled?: boolean; // Recordatorios fiscales
 }
 
 export interface BankTransaction {

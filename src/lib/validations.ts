@@ -96,6 +96,16 @@ export const settingsSchema = z.object({
   stripePublicKey: z.string().optional(),
   stripeSecretKey: z.string().optional(),
 
+  // Email configuration
+  emailFromAddress: z.string().email().optional().or(z.literal('')),
+  emailFromName: z.string().optional(),
+  emailNotificationsEnabled: z.boolean().optional(),
+  emailInvoiceEnabled: z.boolean().optional(),
+  emailOverdueEnabled: z.boolean().optional(),
+  emailPaymentEnabled: z.boolean().optional(),
+  emailTeamInvitesEnabled: z.boolean().optional(),
+  emailFiscalRemindersEnabled: z.boolean().optional(),
+
   // VeriFactu fields
   verifactuEnabled: z.boolean().optional(),
   verifactuEnvironment: z.enum(['production', 'sandbox']).optional(),

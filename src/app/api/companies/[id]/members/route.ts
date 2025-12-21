@@ -132,40 +132,44 @@ export async function POST(
 
     await company.save();
 
-    // Send invitation email if SendGrid is configured
+    // Send invitation email using emailService
     try {
-      const { env } = await import('@/lib/env');
-      if (env.SENDGRID_API_KEY) {
-        const sgMail = (await import('@sendgrid/mail')).default;
-        sgMail.setApiKey(env.SENDGRID_API_KEY);
-        
-        const inviteUrl = `${process.env.NEXTAUTH_URL}/auth/signin`;
-        const msg = {
-          to: user.email,
-          from: process.env.SENDGRID_FROM_EMAIL || 'noreply@facturahub.com',
-          subject: `Invitación a unirse a ${company.name}`,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <div style="background: #f8f9fa; padding: 20px; border-radius: 8px;">
-                <h2 style="color: #333; margin-bottom: 20px;">Invitación a Equipo</h2>
-                <p>Hola ${user.name},</p>
-                <p>Has sido invitado a unirte a <strong>${company.name}</strong> con el rol de <strong>${role}</strong>.</p>
-                <div style="text-align: center; margin-top: 30px;">
-                  <a href="${inviteUrl}" style="background: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
-                    Acceder a la Plataforma
-                  </a>
-                </div>
-                <p style="margin-top: 30px; color: #6c757d; font-size: 14px;">
-                  Si no esperabas esta invitación, puedes ignorar este email.
-                </p>
+      const { emailService } = await import('@/lib/services/email-service');
+      const inviteUrl = `${process.env.NEXTAUTH_URL}/auth/signin`;
+      
+      await emailService.sendEmail({
+        to: user.email,
+        subject: `Invitación a unirse a ${company.name}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 8px;">
+              <h2 style="color: #333; margin-bottom: 20px;">Invitación a Equipo</h2>
+              <p>Hola ${user.name},</p>
+              <p>Has sido invitado a unirte a <strong>${company.name}</strong> con el rol de <strong>${role}</strong>.</p>
+              <div style="text-align: center; margin-top: 30px;">
+                <a href="${inviteUrl}" style="background: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+                  Acceder a la Plataforma
+                </a>
               </div>
+              <p style="margin-top: 30px; color: #6c757d; font-size: 14px;">
+                Si no esperabas esta invitación, puedes ignorar este email.
+              </p>
             </div>
-          `,
-        };
-        await sgMail.send(msg);
-      }
+          </div>
+        `,
+        companyId: companyId.toString(),
+        userId: session.user.id,
+        type: 'team_invite',
+        metadata: {
+          companyId: company._id.toString(),
+          companyName: company.name,
+          userId: user._id.toString(),
+          role,
+        },
+      });
     } catch (emailError) {
-      console.error('Error sending invitation email:', emailError);
+      const { logger } = await import('@/lib/logger');
+      logger.error('Error sending invitation email', emailError);
       // Don't fail the invitation if email fails
     }
 
