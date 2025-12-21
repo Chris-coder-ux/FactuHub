@@ -26,7 +26,19 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Here you would typically log the error to an observability service like Sentry
+    // Log to Sentry if available
+    if (typeof window !== 'undefined' && (window as any).Sentry) {
+      (window as any).Sentry.captureException(error, {
+        contexts: {
+          react: {
+            componentStack: errorInfo.componentStack,
+          },
+        },
+        tags: {
+          errorBoundary: true,
+        },
+      });
+    }
     console.error("Critical error captured by ErrorBoundary:", error, errorInfo);
   }
 

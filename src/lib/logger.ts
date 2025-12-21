@@ -1,12 +1,16 @@
 /**
  * Centralized logger utility to handle application logs
  * and prevent sensitive information exposure.
+ * Integrated with Sentry for error tracking.
  */
+
+import * as Sentry from '@sentry/nextjs';
 
 type LogLevel = 'info' | 'warn' | 'error' | 'debug';
 
 class Logger {
   private readonly isProduction = process.env.NODE_ENV === 'production';
+  private readonly sentryEnabled = !!process.env.SENTRY_DSN || !!process.env.NEXT_PUBLIC_SENTRY_DSN;
 
   private formatMessage(level: LogLevel, message: string, meta?: any) {
     const timestamp = new Date().toISOString();
@@ -48,6 +52,19 @@ class Logger {
   warn(message: string, meta?: any) {
     const log = this.formatMessage('warn', message, meta);
     console.warn(JSON.stringify(log));
+
+    // Send warnings to Sentry in production
+    if (this.sentryEnabled && this.isProduction) {
+      Sentry.captureMessage(message, {
+        level: 'warning',
+        tags: {
+          component: 'logger',
+        },
+        extra: {
+          meta: this.sanitize(meta),
+        },
+      });
+    }
   }
 
   error(message: string, error?: any, meta?: any) {
@@ -59,6 +76,33 @@ class Logger {
       } : { error }),
     });
     console.error(JSON.stringify(log));
+
+    // Send to Sentry if enabled
+    if (this.sentryEnabled) {
+      if (error instanceof Error) {
+        Sentry.captureException(error, {
+          level: 'error',
+          tags: {
+            component: 'logger',
+          },
+          extra: {
+            message,
+            meta: this.sanitize(meta),
+          },
+        });
+      } else {
+        Sentry.captureMessage(message, {
+          level: 'error',
+          tags: {
+            component: 'logger',
+          },
+          extra: {
+            error,
+            meta: this.sanitize(meta),
+          },
+        });
+      }
+    }
   }
 
   debug(message: string, meta?: any) {

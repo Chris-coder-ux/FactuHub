@@ -80,6 +80,13 @@ export const env = {
   // Cron (for production)
   CRON_SECRET: getEnvVar("CRON_SECRET", false),
 
+  // Sentry (optional)
+  SENTRY_DSN: getEnvVar("SENTRY_DSN", false),
+  NEXT_PUBLIC_SENTRY_DSN: getEnvVar("NEXT_PUBLIC_SENTRY_DSN", false),
+  SENTRY_ORG: getEnvVar("SENTRY_ORG", false),
+  SENTRY_PROJECT: getEnvVar("SENTRY_PROJECT", false),
+  SENTRY_AUTH_TOKEN: getEnvVar("SENTRY_AUTH_TOKEN", false),
+
   // Environment
   NODE_ENV: process.env.NODE_ENV || "development",
   IS_PRODUCTION: process.env.NODE_ENV === "production",
