@@ -1,0 +1,348 @@
+---
+alwaysApply: true
+---
+
+# 🔒 Seguridad - Reglas Críticas
+
+## 🎯 PRINCIPIOS FUNDAMENTALES
+
+1. **Defensa en profundidad**: Múltiples capas de seguridad
+2. **Principio de menor privilegio**: Solo permisos necesarios
+3. **Validación de entrada**: Nunca confiar en datos del cliente
+4. **Sanitización de salida**: Prevenir XSS e inyecciones
+5. **Secrets management**: Nunca exponer secrets en código
+
+## 🚫 PROHIBIDO ABSOLUTAMENTE
+
+```typescript
+// ❌ Secrets en código
+const API_KEY = 'sk_live_1234567890';
+
+// ❌ SQL injection
+const query = `SELECT * FROM users WHERE id = ${userId}`;
+
+// ❌ XSS sin sanitizar
+<div dangerouslySetInnerHTML={{ __html: userInput }} />
+
+// ❌ Validación solo en cliente
+if (amount > 0) { /* ... */ } // ❌ Sin validación en servidor
+
+// ❌ Exponer información sensible
+console.log('User password:', password);
+```
+
+## ✅ PATRONES OBLIGATORIOS
+
+### Variables de Entorno
+
+```typescript
+// ❌ INCORRECTO
+const apiKey = 'sk_live_1234567890';
+
+// ✅ CORRECTO
+// .env.local
+DATABASE_URL=postgres://...
+STRIPE_SECRET_KEY=sk_live_...
+NEXT_PUBLIC_API_URL=/api
+
+// lib/env.ts
+import { z } from 'zod';
+
+const envSchema = z.object({
+  DATABASE_URL: z.string().url(),
+  STRIPE_SECRET_KEY: z.string().startsWith('sk_'),
+  NEXT_PUBLIC_API_URL: z.string(),
+});
+
+export const env = envSchema.parse({
+  DATABASE_URL: process.env.DATABASE_URL,
+  STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
+  NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+});
+
+// Uso
+import { env } from '@/lib/env';
+const apiKey = env.STRIPE_SECRET_KEY; // ✅ Type-safe
+```
+
+### Validación de Entrada
+
+```typescript
+// Siempre validar en servidor
+import { z } from 'zod';
+
+const CreateInvoiceSchema = z.object({
+  amount: z.number().positive().max(1000000),
+  currency: z.enum(['EUR', 'USD']),
+  clientId: z.string().uuid(),
+  description: z.string().max(1000).trim(),
+});
+
+// API Route
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    
+    // ✅ Validar con Zod
+    const validated = CreateInvoiceSchema.parse(body);
+    
+    // ✅ Sanitizar
+    const sanitized = {
+      ...validated,
+      description: sanitizeHtml(validated.description),
+    };
+    
+    const invoice = await createInvoice(sanitized);
+    return NextResponse.json({ data: invoice });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: error.errors },
+        { status: 400 }
+      );
+    }
+    throw error;
+  }
+}
+```
+
+### Sanitización de HTML
+
+```typescript
+// lib/sanitization.ts
+import DOMPurify from 'isomorphic-dompurify';
+
+export function sanitizeHtml(dirty: string): string {
+  return DOMPurify.sanitize(dirty, {
+    ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'a', 'p'],
+    ALLOWED_ATTR: ['href'],
+  });
+}
+
+// Uso en componentes
+function UserComment({ comment }: { comment: string }) {
+  // ✅ Sanitizar antes de renderizar
+  const sanitized = sanitizeHtml(comment);
+  
+  return (
+    <div 
+      dangerouslySetInnerHTML={{ __html: sanitized }}
+    />
+  );
+}
+```
+
+### Autenticación y Autorización
+
+```typescript
+// lib/auth.ts
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+
+export async function requireAuth() {
+  const session = await getServerSession(authOptions);
+  
+  if (!session) {
+    throw new UnauthorizedError('Authentication required');
+  }
+  
+  return session;
+}
+
+export async function requireRole(role: string) {
+  const session = await requireAuth();
+  
+  if (session.user.role !== role) {
+    throw new ForbiddenError('Insufficient permissions');
+  }
+  
+  return session;
+}
+
+// Uso en API Routes
+export async function DELETE(request: NextRequest) {
+  const session = await requireRole('admin');
+  
+  // Solo admins pueden eliminar
+  await deleteInvoice(id);
+  return NextResponse.json({ success: true });
+}
+```
+
+### Rate Limiting
+
+```typescript
+// lib/rate-limit.ts
+import { Ratelimit } from '@upstash/ratelimit';
+import { Redis } from '@upstash/redis';
+
+const ratelimit = new Ratelimit({
+  redis: Redis.fromEnv(),
+  limiter: Ratelimit.slidingWindow(10, '10 s'),
+});
+
+export async function checkRateLimit(identifier: string) {
+  const { success, limit, remaining } = await ratelimit.limit(identifier);
+  
+  if (!success) {
+    throw new TooManyRequestsError(
+      `Rate limit exceeded. Try again in ${limit} seconds.`
+    );
+  }
+  
+  return { remaining, limit };
+}
+
+// Uso en API Routes
+export async function POST(request: NextRequest) {
+  const ip = request.headers.get('x-forwarded-for') || 'unknown';
+  await checkRateLimit(`api:${ip}`);
+  
+  // Continuar con la lógica
+}
+```
+
+### Headers de Seguridad
+
+```typescript
+// middleware.ts
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+
+export function middleware(request: NextRequest) {
+  const response = NextResponse.next();
+  
+  // Security headers
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  response.headers.set('X-Frame-Options', 'DENY');
+  response.headers.set('X-XSS-Protection', '1; mode=block');
+  response.headers.set(
+    'Strict-Transport-Security',
+    'max-age=31536000; includeSubDomains'
+  );
+  response.headers.set(
+    'Content-Security-Policy',
+    "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline';"
+  );
+  
+  return response;
+}
+```
+
+### Protección CSRF
+
+```typescript
+// lib/csrf.ts
+import { randomBytes } from 'crypto';
+
+export function generateCsrfToken(): string {
+  return randomBytes(32).toString('hex');
+}
+
+export function validateCsrfToken(token: string, sessionToken: string): boolean {
+  return token === sessionToken;
+}
+
+// Uso en formularios
+export async function POST(request: NextRequest) {
+  const body = await request.json();
+  const csrfToken = request.headers.get('x-csrf-token');
+  const sessionToken = request.cookies.get('csrf-token')?.value;
+  
+  if (!csrfToken || !validateCsrfToken(csrfToken, sessionToken || '')) {
+    throw new ForbiddenError('Invalid CSRF token');
+  }
+  
+  // Continuar con la lógica
+}
+```
+
+### Encriptación de Datos Sensibles
+
+```typescript
+// lib/encryption.ts
+import crypto from 'crypto';
+
+const algorithm = 'aes-256-gcm';
+const key = Buffer.from(process.env.ENCRYPTION_KEY!, 'hex');
+
+export function encrypt(text: string): string {
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv(algorithm, key, iv);
+  
+  let encrypted = cipher.update(text, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  
+  const authTag = cipher.getAuthTag();
+  
+  return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
+}
+
+export function decrypt(encrypted: string): string {
+  const [ivHex, authTagHex, encryptedText] = encrypted.split(':');
+  const iv = Buffer.from(ivHex, 'hex');
+  const authTag = Buffer.from(authTagHex, 'hex');
+  
+  const decipher = crypto.createDecipheriv(algorithm, key, iv);
+  decipher.setAuthTag(authTag);
+  
+  let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
+  decrypted += decipher.final('utf8');
+  
+  return decrypted;
+}
+
+// Uso
+const encryptedPassword = encrypt(userPassword);
+const decryptedPassword = decrypt(encryptedPassword);
+```
+
+### SQL Injection Prevention
+
+```typescript
+// ✅ CORRECTO - Usar parámetros preparados
+import { db } from '@/lib/db';
+
+async function getInvoice(id: string) {
+  // ✅ MongoDB/Mongoose - Automáticamente seguro
+  return await Invoice.findById(id);
+  
+  // ✅ Prisma - Automáticamente seguro
+  return await prisma.invoice.findUnique({ where: { id } });
+  
+  // ✅ Raw queries con parámetros
+  return await db.query(
+    'SELECT * FROM invoices WHERE id = $1',
+    [id]
+  );
+}
+
+// ❌ INCORRECTO
+const query = `SELECT * FROM invoices WHERE id = ${id}`; // ❌ SQL Injection
+```
+
+### Logging Seguro
+
+```typescript
+// ❌ INCORRECTO
+logger.info('User login', { email, password });
+
+// ✅ CORRECTO
+logger.info('User login', { 
+  userId: user.id,
+  email: maskEmail(user.email), // Solo primeros 3 caracteres
+  // Nunca loggear passwords, tokens, etc.
+});
+```
+
+## 🔐 Secrets Management
+
+```typescript
+// ✅ Usar servicios de secrets (Vercel, AWS Secrets Manager, etc.)
+// ✅ Rotar secrets regularmente
+// ✅ Nunca commitear .env a git
+// ✅ Usar diferentes secrets para dev/staging/prod
+```
+
+## 🚨 REGLA FINAL
+**Nunca confiar en datos del cliente. Validar, sanitizar y autenticar en cada capa. Los secrets nunca deben estar en el código.**

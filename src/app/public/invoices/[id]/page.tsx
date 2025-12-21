@@ -121,8 +121,15 @@ export default function PublicInvoicePage() {
                 </div>
               </div>
               <div className="text-right space-y-1">
-                <h1 className="text-4xl font-black tracking-tighter text-slate-900 uppercase">Factura</h1>
+                <h1 className="text-4xl font-black tracking-tighter text-slate-900 uppercase">
+                  {invoice.invoiceType === 'proforma' ? 'Factura Proforma' : 'Factura'}
+                </h1>
                 <p className="text-xl font-medium text-primary">{invoice.invoiceNumber}</p>
+                {invoice.invoiceType === 'proforma' && (
+                  <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300 mt-2">
+                    PROFORMA - Sin validez fiscal
+                  </Badge>
+                )}
               </div>
             </div>
 

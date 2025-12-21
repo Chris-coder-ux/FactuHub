@@ -1,0 +1,403 @@
+---
+alwaysApply: true
+---
+
+# ⚠️ Manejo de Errores - Patrones Estrictos
+
+## 🎯 PRINCIPIOS FUNDAMENTALES
+
+1. **Nunca silenciar errores**: Siempre manejar explícitamente
+2. **Errores tipados**: Usar clases de error personalizadas
+3. **Mensajes descriptivos**: Contexto suficiente para debugging
+4. **Result Pattern**: Usar `Result<T>` para operaciones que pueden fallar
+5. **Error boundaries**: En React, siempre usar ErrorBoundary
+
+## 🚫 PROHIBIDO
+
+```typescript
+// ❌ Silenciar errores
+try {
+  await riskyOperation();
+} catch (error) {
+  // Nada
+}
+
+// ❌ any en catch
+catch (error: any) {
+  console.log(error.message);
+}
+
+// ❌ Errores genéricos sin contexto
+throw new Error('Error');
+
+// ❌ Swallowing errors
+catch (error) {
+  return null; // Sin logging
+}
+```
+
+## ✅ PATRONES OBLIGATORIOS
+
+### Result Pattern
+
+```typescript
+type Result<T> = 
+  | { success: true; data: T }
+  | { success: false; error: string; code?: string };
+
+async function fetchInvoice(id: string): Promise<Result<Invoice>> {
+  try {
+    const invoice = await db.invoices.findById(id);
+    if (!invoice) {
+      return { 
+        success: false, 
+        error: 'Invoice not found',
+        code: 'INVOICE_NOT_FOUND'
+      };
+    }
+    return { success: true, data: invoice };
+  } catch (error) {
+    logger.error('Failed to fetch invoice', { id, error });
+    return { 
+      success: false, 
+      error: 'Database error',
+      code: 'DB_ERROR'
+    };
+  }
+}
+
+// Uso
+const result = await fetchInvoice('123');
+if (result.success) {
+  console.log(result.data);
+} else {
+  console.error(result.error, result.code);
+}
+```
+
+### Clases de Error Personalizadas
+
+```typescript
+// lib/errors.ts
+export class AppError extends Error {
+  constructor(
+    message: string,
+    public readonly code: string,
+    public readonly statusCode: number = 500,
+    public readonly details?: unknown
+  ) {
+    super(message);
+    this.name = 'AppError';
+    Error.captureStackTrace(this, this.constructor);
+  }
+}
+
+export class ValidationError extends AppError {
+  constructor(message: string, details?: unknown) {
+    super(message, 'VALIDATION_ERROR', 400, details);
+    this.name = 'ValidationError';
+  }
+}
+
+export class NotFoundError extends AppError {
+  constructor(resource: string, id?: string) {
+    super(
+      `${resource} not found${id ? `: ${id}` : ''}`,
+      'NOT_FOUND',
+      404
+    );
+    this.name = 'NotFoundError';
+  }
+}
+
+export class UnauthorizedError extends AppError {
+  constructor(message = 'Unauthorized') {
+    super(message, 'UNAUTHORIZED', 401);
+    this.name = 'UnauthorizedError';
+  }
+}
+
+// Uso
+if (!invoice) {
+  throw new NotFoundError('Invoice', invoiceId);
+}
+
+if (!user.hasPermission('create:invoice')) {
+  throw new UnauthorizedError('Insufficient permissions');
+}
+```
+
+### Manejo en API Routes
+
+```typescript
+// app/api/invoices/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { ValidationError, NotFoundError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
+
+export async function GET(request: NextRequest) {
+  try {
+    const searchParams = request.nextUrl.searchParams;
+    const id = searchParams.get('id');
+    
+    if (!id) {
+      throw new ValidationError('ID parameter is required');
+    }
+    
+    const invoice = await getInvoice(id);
+    if (!invoice) {
+      throw new NotFoundError('Invoice', id);
+    }
+    
+    return NextResponse.json({ data: invoice });
+  } catch (error) {
+    return handleApiError(error);
+  }
+}
+
+function handleApiError(error: unknown): NextResponse {
+  // Logging
+  logger.error('API Error', { error });
+  
+  // Errores conocidos
+  if (error instanceof ValidationError) {
+    return NextResponse.json(
+      { 
+        error: error.message,
+        code: error.code,
+        details: error.details
+      },
+      { status: error.statusCode }
+    );
+  }
+  
+  if (error instanceof NotFoundError) {
+    return NextResponse.json(
+      { error: error.message, code: error.code },
+      { status: 404 }
+    );
+  }
+  
+  // Error desconocido
+  return NextResponse.json(
+    { error: 'Internal server error', code: 'INTERNAL_ERROR' },
+    { status: 500 }
+  );
+}
+```
+
+### Manejo en Server Components
+
+```typescript
+// app/invoices/[id]/page.tsx
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { NotFoundError } from '@/lib/errors';
+
+async function InvoicePage({ params }: { params: { id: string } }) {
+  try {
+    const invoice = await getInvoice(params.id);
+    
+    if (!invoice) {
+      throw new NotFoundError('Invoice', params.id);
+    }
+    
+    return <InvoiceDetail invoice={invoice} />;
+  } catch (error) {
+    // Next.js maneja errores automáticamente con error.tsx
+    throw error;
+  }
+}
+
+// app/invoices/[id]/error.tsx
+'use client';
+
+import { useEffect } from 'react';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+
+export default function InvoiceError({
+  error,
+  reset,
+}: {
+  error: Error & { digest?: string };
+  reset: () => void;
+}) {
+  useEffect(() => {
+    logger.error('Invoice page error', { error });
+  }, [error]);
+  
+  return (
+    <div>
+      <h2>Something went wrong!</h2>
+      <button onClick={reset}>Try again</button>
+    </div>
+  );
+}
+```
+
+### Manejo en Client Components
+
+```typescript
+'use client';
+
+import { useState } from 'react';
+import { toast } from 'sonner';
+
+export function InvoiceForm() {
+  const [error, setError] = useState<string | null>(null);
+  
+  async function handleSubmit(data: FormData) {
+    try {
+      setError(null);
+      const response = await fetch('/api/invoices', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create invoice');
+      }
+      
+      toast.success('Invoice created successfully');
+    } catch (error) {
+      const message = error instanceof Error 
+        ? error.message 
+        : 'Unknown error occurred';
+      setError(message);
+      toast.error(message);
+      logger.error('Failed to create invoice', { error });
+    }
+  }
+  
+  return (
+    <form onSubmit={handleSubmit}>
+      {error && <div className="error">{error}</div>}
+      {/* ... */}
+    </form>
+  );
+}
+```
+
+### Validación con Zod
+
+```typescript
+import { z } from 'zod';
+import { ValidationError } from '@/lib/errors';
+
+const InvoiceSchema = z.object({
+  amount: z.number().positive('Amount must be positive'),
+  currency: z.enum(['EUR', 'USD'], {
+    errorMap: () => ({ message: 'Currency must be EUR or USD' }),
+  }),
+});
+
+function validateInvoice(data: unknown) {
+  const result = InvoiceSchema.safeParse(data);
+  
+  if (!result.success) {
+    throw new ValidationError(
+      'Invalid invoice data',
+      result.error.errors
+    );
+  }
+  
+  return result.data;
+}
+```
+
+### Logging de Errores
+
+```typescript
+// lib/logger.ts
+export const logger = {
+  error: (message: string, context?: unknown) => {
+    console.error(`[ERROR] ${message}`, context);
+    // Enviar a servicio de logging (Sentry, LogRocket, etc.)
+  },
+  
+  warn: (message: string, context?: unknown) => {
+    console.warn(`[WARN] ${message}`, context);
+  },
+  
+  info: (message: string, context?: unknown) => {
+    console.info(`[INFO] ${message}`, context);
+  },
+};
+
+// Uso
+try {
+  await riskyOperation();
+} catch (error) {
+  logger.error('Risky operation failed', {
+    error,
+    userId: user.id,
+    operation: 'riskyOperation',
+  });
+  throw error;
+}
+```
+
+## 🎯 Error Recovery
+
+```typescript
+// Retry con exponential backoff
+async function fetchWithRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries = 3
+): Promise<T> {
+  let lastError: Error;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error as Error;
+      if (attempt < maxRetries - 1) {
+        const delay = Math.pow(2, attempt) * 1000;
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  
+  throw lastError!;
+}
+
+// Circuit breaker
+class CircuitBreaker {
+  private failures = 0;
+  private state: 'closed' | 'open' | 'half-open' = 'closed';
+  
+  async execute<T>(fn: () => Promise<T>): Promise<T> {
+    if (this.state === 'open') {
+      throw new Error('Circuit breaker is open');
+    }
+    
+    try {
+      const result = await fn();
+      this.onSuccess();
+      return result;
+    } catch (error) {
+      this.onFailure();
+      throw error;
+    }
+  }
+  
+  private onSuccess() {
+    this.failures = 0;
+    this.state = 'closed';
+  }
+  
+  private onFailure() {
+    this.failures++;
+    if (this.failures >= 5) {
+      this.state = 'open';
+      setTimeout(() => {
+        this.state = 'half-open';
+      }, 60000);
+    }
+  }
+}
+```
+
+## 🚨 REGLA FINAL
+**Nunca silenciar errores. Siempre proporcionar contexto suficiente para debugging. Usar tipos de error específicos y Result Pattern cuando sea apropiado.**

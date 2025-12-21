@@ -1,0 +1,567 @@
+openapi: 3.0.3
+info:
+  title: AppTrabajo API
+  description: API REST para gestión de facturación, clientes, productos y cumplimiento fiscal (VeriFactu/AEAT)
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@apptrabajo.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.apptrabajo.com
+    description: Production server
+  - url: http://localhost:3000
+    description: Development server
+
+tags:
+  - name: Authentication
+    description: Autenticación y gestión de sesiones
+  - name: Companies
+    description: Gestión de empresas multi-tenant
+  - name: Clients
+    description: Gestión de clientes
+  - name: Products
+    description: Gestión de productos y servicios
+  - name: Invoices
+    description: Gestión de facturas
+  - name: VeriFactu
+    description: Cumplimiento fiscal VeriFactu/AEAT
+  - name: Expenses
+    description: Gestión de gastos
+  - name: Receipts
+    description: Gestión de recibos con OCR
+  - name: Banking
+    description: Integración bancaria y conciliación
+  - name: Fiscal
+    description: Previsión fiscal (IVA/IRPF)
+  - name: Reports
+    description: Reportes y analytics
+  - name: Templates
+    description: Plantillas de facturas y emails
+  - name: Audit
+    description: Logs de auditoría
+
+security:
+  - BearerAuth: []
+
+paths:
+  /api/auth/register:
+    post:
+      tags: [Authentication]
+      summary: Registrar nuevo usuario
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name:
+                  type: string
+                  example: "Juan Pérez"
+                email:
+                  type: string
+                  format: email
+                  example: "juan@example.com"
+                password:
+                  type: string
+                  format: password
+                  minLength: 6
+      responses:
+        '201':
+          description: Usuario creado exitosamente
+        '400':
+          description: Error de validación
+
+  /api/companies:
+    get:
+      tags: [Companies]
+      summary: Listar empresas del usuario
+      responses:
+        '200':
+          description: Lista de empresas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  companies:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Company'
+    post:
+      tags: [Companies]
+      summary: Crear nueva empresa
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyInput'
+      responses:
+        '201':
+          description: Empresa creada exitosamente
+
+  /api/companies/switch:
+    post:
+      tags: [Companies]
+      summary: Cambiar empresa activa
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [companyId]
+              properties:
+                companyId:
+                  type: string
+      responses:
+        '200':
+          description: Empresa cambiada exitosamente
+
+  /api/clients:
+    get:
+      tags: [Clients]
+      summary: Listar clientes
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Lista de clientes paginada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedResponse'
+    post:
+      tags: [Clients]
+      summary: Crear cliente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientInput'
+      responses:
+        '201':
+          description: Cliente creado exitosamente
+
+  /api/clients/{id}:
+    get:
+      tags: [Clients]
+      summary: Obtener cliente por ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Cliente encontrado
+    put:
+      tags: [Clients]
+      summary: Actualizar cliente
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientInput'
+      responses:
+        '200':
+          description: Cliente actualizado
+    delete:
+      tags: [Clients]
+      summary: Eliminar cliente
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Cliente eliminado
+
+  /api/products:
+    get:
+      tags: [Products]
+      summary: Listar productos
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Lista de productos
+    post:
+      tags: [Products]
+      summary: Crear producto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductInput'
+      responses:
+        '201':
+          description: Producto creado
+
+  /api/invoices:
+    get:
+      tags: [Invoices]
+      summary: Listar facturas
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, sent, paid, overdue, cancelled]
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [invoice, proforma]
+      responses:
+        '200':
+          description: Lista de facturas
+    post:
+      tags: [Invoices]
+      summary: Crear factura
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceInput'
+      responses:
+        '201':
+          description: Factura creada
+
+  /api/invoices/{id}:
+    get:
+      tags: [Invoices]
+      summary: Obtener factura por ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Factura encontrada
+    put:
+      tags: [Invoices]
+      summary: Actualizar factura
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Factura actualizada
+
+  /api/invoices/{id}/pdf:
+    get:
+      tags: [Invoices]
+      summary: Generar PDF de factura
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: PDF generado
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+
+  /api/invoices/{id}/send:
+    post:
+      tags: [Invoices]
+      summary: Enviar factura por email
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Email enviado
+
+  /api/invoices/{id}/verifactu/generate:
+    post:
+      tags: [VeriFactu]
+      summary: Generar XML VeriFactu
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: XML generado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  xml:
+                    type: string
+                  hash:
+                    type: string
+
+  /api/invoices/{id}/verifactu/sign:
+    post:
+      tags: [VeriFactu]
+      summary: Firmar XML VeriFactu
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: XML firmado
+
+  /api/invoices/{id}/verifactu/send:
+    post:
+      tags: [VeriFactu]
+      summary: Enviar factura a AEAT
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Factura enviada a AEAT
+
+  /api/analytics:
+    get:
+      tags: [Reports]
+      summary: Analytics avanzados
+      parameters:
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Datos de analytics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsData'
+
+  /api/reports:
+    get:
+      tags: [Reports]
+      summary: Reportes básicos
+      responses:
+        '200':
+          description: Datos de reportes
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Company:
+      type: object
+      properties:
+        _id:
+          type: string
+        name:
+          type: string
+        taxId:
+          type: string
+        address:
+          type: object
+        ownerId:
+          type: string
+        members:
+          type: array
+          items:
+            type: object
+
+    CompanyInput:
+      type: object
+      required: [name, taxId, address]
+      properties:
+        name:
+          type: string
+        taxId:
+          type: string
+        address:
+          type: object
+          properties:
+            street:
+              type: string
+            city:
+              type: string
+            state:
+              type: string
+            zipCode:
+              type: string
+            country:
+              type: string
+
+    Client:
+      type: object
+      properties:
+        _id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        address:
+          type: object
+        taxId:
+          type: string
+
+    ClientInput:
+      type: object
+      required: [name, email]
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        address:
+          type: object
+        taxId:
+          type: string
+
+    ProductInput:
+      type: object
+      required: [name, price, tax]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        price:
+          type: number
+        tax:
+          type: number
+        stock:
+          type: number
+
+    InvoiceInput:
+      type: object
+      required: [client, items, dueDate]
+      properties:
+        client:
+          type: string
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              product:
+                type: string
+              quantity:
+                type: number
+              price:
+                type: number
+              tax:
+                type: number
+        dueDate:
+          type: string
+          format: date
+        invoiceType:
+          type: string
+          enum: [invoice, proforma]
+        notes:
+          type: string
+
+    PaginatedResponse:
+      type: object
+      properties:
+        data:
+          type: array
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+        totalPages:
+          type: integer
+
+    AnalyticsData:
+      type: object
+      properties:
+        clientProfitability:
+          type: array
+        productProfitability:
+          type: array
+        cashFlow:
+          type: array
+        trends:
+          type: array
+        summary:
+          type: object
+
