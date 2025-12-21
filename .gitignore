@@ -70,9 +70,39 @@ cypress/videos/
 eslint_report.json
 security_report.json
 report.json
+AUDIT_REPORT_JSON.json
 
 # Codacy
 .codacy/
+.codacy/logs/
+
+# MCP Servers (development tools, not part of main app)
+codacy-mcp/
+sequential-thinking-mcp/
+sonarqube-mcp/
+
+# Artillery (performance testing - can be regenerated)
+artillery/
+artillery-*.yml
+artillery-*.js
+artillery-processor.js
+
+# Editor temporary files
+*.kate-swp
+*.kate-backup
+*.sublime-*
+.vscode/settings.json
+.vscode/launch.json
+.vscode/tasks.json
+*.code-workspace
+
+# Build artifacts
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+dist/
+build/
+out/
+.next/
 
 # AI Rules (keep these)
 #Ignore vscode AI rules
