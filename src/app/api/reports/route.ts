@@ -67,9 +67,10 @@ export async function GET(request: NextRequest) {
         { $group: { _id: null, total: { $sum: '$total' } } }
       ]),
       Invoice.find(companyMatch)
-        .populate('client')
+        .populate('client', 'name email')
         .sort({ createdAt: -1 })
-        .limit(5),
+        .limit(5)
+        .lean(),
       Invoice.aggregate([
         { $match: { ...companyMatch, status: 'paid' } },
         {

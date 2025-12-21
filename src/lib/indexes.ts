@@ -12,6 +12,7 @@ import Product from './models/Product';
 import Payment from './models/Payment';
 import RecurringInvoice from './models/RecurringInvoice';
 import User from './models/User';
+import { logger } from './logger';
 
 /**
  * Create all necessary indexes for the application
@@ -19,7 +20,7 @@ import User from './models/User';
  */
 export async function createIndexes() {
   try {
-    console.log('Creating database indexes...');
+    logger.info('Creating database indexes...');
 
     // Client indexes
     await Client.collection.createIndex({ email: 1 }, { unique: true });
@@ -27,7 +28,12 @@ export async function createIndexes() {
     await Client.collection.createIndex({ name: 1 });
 
     // Invoice indexes
-    await Invoice.collection.createIndex({ invoiceNumber: 1 }, { unique: true });
+    // Remove global unique index on invoiceNumber (replaced by compound unique index)
+    // Note: Drop existing unique index manually if it exists: db.invoices.dropIndex("invoiceNumber_1")
+    await Invoice.collection.createIndex(
+      { companyId: 1, invoiceNumber: 1 }, 
+      { unique: true, name: 'companyId_invoiceNumber_unique' }
+    );
     await Invoice.collection.createIndex({ client: 1, createdAt: -1 });
     await Invoice.collection.createIndex({ status: 1 });
     await Invoice.collection.createIndex({ dueDate: 1 });
@@ -68,9 +74,9 @@ export async function createIndexes() {
     await User.collection.createIndex({ email: 1 }, { unique: true });
     await User.collection.createIndex({ role: 1 });
 
-    console.log('✅ All database indexes created successfully');
+    logger.info('All database indexes created successfully');
   } catch (error) {
-    console.error('❌ Error creating indexes:', error);
+    logger.error('Error creating indexes', error);
     throw error;
   }
 }
@@ -81,7 +87,7 @@ export async function createIndexes() {
  */
 export async function dropIndexes() {
   try {
-    console.log('Dropping all indexes...');
+    logger.info('Dropping all indexes...');
 
     await Client.collection.dropIndexes();
     await Invoice.collection.dropIndexes();
@@ -90,9 +96,9 @@ export async function dropIndexes() {
     await RecurringInvoice.collection.dropIndexes();
     await User.collection.dropIndexes();
 
-    console.log('✅ All indexes dropped');
+    logger.info('All indexes dropped');
   } catch (error) {
-    console.error('❌ Error dropping indexes:', error);
+    logger.error('Error dropping indexes', error);
     throw error;
   }
 }
@@ -104,10 +110,10 @@ export async function listIndexes(collectionName: string) {
   try {
     const collection = mongoose.connection.collection(collectionName);
     const indexes = await collection.indexes();
-    console.log(`Indexes for ${collectionName}:`, indexes);
+    logger.info(`Indexes for ${collectionName}`, { indexes, collectionName });
     return indexes;
   } catch (error) {
-    console.error(`Error listing indexes for ${collectionName}:`, error);
+    logger.error(`Error listing indexes for ${collectionName}`, { error, collectionName });
     throw error;
   }
 }

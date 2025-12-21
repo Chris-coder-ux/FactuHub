@@ -13,8 +13,8 @@ export async function GET(
     await dbConnect();
     
     const invoice = await Invoice.findById(params.id)
-      .populate('client')
-      .populate('items.product');
+      .populate('client', 'name email phone address')
+      .populate('items.product', 'name price tax');
     
     if (!invoice) {
       return NextResponse.json({ message: 'Invoice not found' }, { status: 404 });

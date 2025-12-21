@@ -12,8 +12,12 @@ import { createCompanyFilter, toCompanyObjectId } from '@/lib/mongodb-helpers';
 import { InvoiceService } from '@/lib/services/invoice-service';
 import { veriFactuQueue } from '@/lib/queues/verifactu-queue';
 import rateLimiter, { RATE_LIMITS } from '@/lib/rate-limit';
+import { auditMiddleware } from '@/lib/middleware/audit-middleware';
+import { MetricsService } from '@/lib/services/metrics-service';
+import { realtimeService } from '@/lib/services/realtime-service';
 
 export async function GET(request: NextRequest) {
+  const startTime = Date.now();
   try {
     // Require company context for multi-company support
     const { session, companyId } = await requireCompanyContext();
@@ -39,10 +43,16 @@ export async function GET(request: NextRequest) {
       filter.status = status;
     }
     
+    // Filter by invoice type if provided
+    const type = searchParams.get('type');
+    if (type && ['invoice', 'proforma'].includes(type)) {
+      filter.invoiceType = type;
+    }
+    
     const [invoices, total] = await Promise.all([
       Invoice.find(filter)
-        .populate('client')
-        .populate('items.product')
+        .populate('client', 'name email taxId address')
+        .populate('items.product', 'name price tax')
         .sort({ [field]: order })
         .skip(skip)
         .limit(limit)
@@ -52,9 +62,17 @@ export async function GET(request: NextRequest) {
     
     const response = createPaginatedResponse(invoices, total, { page, limit, skip });
     
+    // Track API performance
+    const duration = Date.now() - startTime;
+    MetricsService.trackApiPerformance('/api/invoices', duration, 200, 'GET');
+    
     return NextResponse.json(response);
   } catch (error: any) {
     logger.error('Get invoices error', error);
+    
+    // Track error
+    const duration = Date.now() - startTime;
+    MetricsService.trackApiPerformance('/api/invoices', duration, 500, 'GET');
     
     // Handle permission errors
     const { isPermissionError, handlePermissionError } = await import('@/lib/api-error-handler');
@@ -70,6 +88,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const startTime = Date.now();
   try {
     // Require company context for multi-company support
     const { session, companyId } = await requireCompanyContext();
@@ -114,6 +133,30 @@ export async function POST(request: NextRequest) {
     // Create invoice using service (handles validation, counter, etc.)
     const invoice = await InvoiceService.createInvoice(companyId, validatedData);
 
+    // Emit real-time event
+    await realtimeService.emitInvoiceCreated(
+      companyId,
+      invoice._id.toString(),
+      invoice.invoiceNumber,
+      session.user.id
+    );
+
+    // Log audit event
+    await auditMiddleware(request, {
+      userId: session.user.id,
+      companyId,
+      action: 'create',
+      resourceType: 'invoice',
+      resourceId: invoice._id.toString(),
+      changes: {
+        after: {
+          invoiceNumber: invoice.invoiceNumber,
+          total: invoice.total,
+          status: invoice.status,
+        },
+      },
+    }, { success: true });
+
     // Process VeriFactu asynchronously using queue system
     try {
       await dbConnect();
@@ -136,9 +179,32 @@ export async function POST(request: NextRequest) {
       // Don't fail invoice creation for VeriFactu errors
     }
 
+    // Track API performance
+    const duration = Date.now() - startTime;
+    MetricsService.trackApiPerformance('/api/invoices', duration, 201, 'POST');
+    
     return NextResponse.json(invoice, { status: 201 });
   } catch (error: any) {
     logger.error('Create invoice error', error);
+    
+    // Track error
+    const duration = Date.now() - startTime;
+    const statusCode = error.message?.includes('Insufficient permissions') ? 403 :
+                      error instanceof z.ZodError ? 400 : 500;
+    MetricsService.trackApiPerformance('/api/invoices', duration, statusCode, 'POST');
+    
+    // Log failed audit event
+    try {
+      const { session, companyId } = await requireCompanyContext();
+      await auditMiddleware(request, {
+        userId: session.user.id,
+        companyId,
+        action: 'create',
+        resourceType: 'invoice',
+      }, { success: false, errorMessage: error.message });
+    } catch {
+      // Ignore audit errors
+    }
     
     // Handle permission errors
     if (error.message?.includes('Insufficient permissions') || 

@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
     
     const [expenses, total] = await Promise.all([
       Expense.find(filter)
-        .populate('receiptIds')
+        .populate('receiptIds', 'filename url extractedData confidenceScore')
         .sort({ [field]: order })
         .skip(skip)
         .limit(limit)

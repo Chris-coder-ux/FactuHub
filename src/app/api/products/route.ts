@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import Product from '@/lib/models/Product';
+import Company from '@/lib/models/Company';
 import { requireCompanyContext } from '@/lib/auth';
 import { z } from 'zod';
 import { getPaginationParams, validateSortParam, createPaginatedResponse } from '@/lib/pagination';
 import { productSchema } from '@/lib/validations';
 import { createCompanyFilter, toCompanyObjectId } from '@/lib/mongodb-helpers';
+import { logger } from '@/lib/logger';
+import { cacheService, cacheKeys, cacheTags } from '@/lib/cache';
 
 export async function GET(request: NextRequest) {
   try {
@@ -19,8 +22,34 @@ export async function GET(request: NextRequest) {
     const sortParam = searchParams.get('sort');
     const { field, order } = validateSortParam(sortParam, ['name', 'price', 'createdAt']);
     
-    // Filter by companyId for data isolation
-    const filter = createCompanyFilter(companyId, { deletedAt: null });
+    // Get company to check if it belongs to a group
+    const company = await Company.findById(toCompanyObjectId(companyId)).lean();
+    
+    // Build filter: include own products + shared products from same group
+    const filter: any = {
+      deletedAt: null,
+      $or: [
+        { companyId: toCompanyObjectId(companyId) }, // Own products
+      ]
+    };
+    
+    // If company belongs to a group, include shared products from that group
+    if (company?.groupId) {
+      filter.$or.push({
+        isShared: true,
+        sharedWithGroupId: company.groupId,
+      });
+    }
+    
+    // Generate cache key based on filters
+    const cacheKey = `${cacheKeys.products(companyId)}:${page}:${limit}:${field}:${order}:${company?.groupId || 'nogroup'}`;
+    
+    // Try to get from cache (only for first page to avoid cache bloat)
+    const cached = page === 1 ? await cacheService.get<{ products: unknown[]; total: number }>(cacheKey) : null;
+    
+    if (cached) {
+      return NextResponse.json(createPaginatedResponse(cached.products, cached.total, { page, limit, skip }));
+    }
     
     const [products, total] = await Promise.all([
       Product.find(filter)
@@ -28,14 +57,22 @@ export async function GET(request: NextRequest) {
         .skip(skip)
         .limit(limit)
         .lean(),
-      Product.countDocuments()
+      Product.countDocuments(filter)
     ]);
+    
+    // Cache first page for 1 hour
+    if (page === 1) {
+      await cacheService.set(cacheKey, { products, total }, {
+        ttl: 3600,
+        tags: [cacheTags.products(companyId)],
+      });
+    }
     
     const response = createPaginatedResponse(products, total, { page, limit, skip });
     
     return NextResponse.json(response);
   } catch (error: any) {
-    console.error('Get products error:', error);
+    logger.error('Get products error', error);
     
     // Handle permission errors
     if (error.message?.includes('Company context required')) {
@@ -65,9 +102,12 @@ export async function POST(request: NextRequest) {
     });
     await product.save();
 
+    // Invalidate products cache
+    await cacheService.invalidateByTags([cacheTags.products(companyId)]);
+
     return NextResponse.json(product, { status: 201 });
   } catch (error: any) {
-    console.error('Create product error:', error);
+    logger.error('Create product error', error);
     
     // Handle permission errors
     if (error.message?.includes('Company context required')) {

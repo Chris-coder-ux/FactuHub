@@ -9,6 +9,7 @@ import { clientSchema } from '@/lib/validations';
 import { logger } from '@/lib/logger';
 import { sanitizeObject } from '@/lib/sanitization';
 import { createCompanyFilter, toCompanyObjectId } from '@/lib/mongodb-helpers';
+import { cacheService, cacheKeys, cacheTags } from '@/lib/cache';
 
 export async function GET(request: NextRequest) {
   try {
@@ -32,14 +33,32 @@ export async function GET(request: NextRequest) {
     // Filter by companyId for data isolation
     const filter = createCompanyFilter(companyId, { deletedAt: null });
     
+    // Generate cache key based on filters
+    const cacheKey = `${cacheKeys.clients(companyId)}:${page}:${limit}:${field}:${order}`;
+    
+    // Try to get from cache (only for first page)
+    const cached = page === 1 ? await cacheService.get<{ clients: unknown[]; total: number }>(cacheKey) : null;
+    
+    if (cached) {
+      return NextResponse.json(createPaginatedResponse(cached.clients, cached.total, { page, limit, skip }));
+    }
+    
     const [clients, total] = await Promise.all([
       Client.find(filter)
         .sort({ [field]: order })
         .skip(skip)
         .limit(limit)
         .lean(),
-      Client.countDocuments()
+      Client.countDocuments(filter)
     ]);
+    
+    // Cache first page for 1 hour
+    if (page === 1) {
+      await cacheService.set(cacheKey, { clients, total }, {
+        ttl: 3600,
+        tags: [cacheTags.clients(companyId)],
+      });
+    }
     
     const response = createPaginatedResponse(clients, total, { page, limit, skip });
     
@@ -91,6 +110,9 @@ export async function POST(request: NextRequest) {
       companyId: toCompanyObjectId(companyId), // Assign companyId to client
     });
     await client.save();
+
+    // Invalidate clients cache
+    await cacheService.invalidateByTags([cacheTags.clients(companyId)]);
 
     return NextResponse.json(client, { status: 201 });
   } catch (error: any) {
