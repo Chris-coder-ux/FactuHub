@@ -1,9 +1,14 @@
 import mongoose from 'mongoose';
 import { env } from './env';
 
+// Skip validation during build (NEXT_PHASE is set during build)
+const isBuildTime = process.env.NEXT_PHASE?.includes('build') || 
+                    process.env.NEXT_PHASE === 'phase-export';
+
 const MONGODB_URI = env.MONGODB_URI;
 
-if (!MONGODB_URI) {
+// Only validate during runtime, not during build
+if (!MONGODB_URI && !isBuildTime && process.env.NODE_ENV !== 'test') {
   throw new Error('Please define the MONGODB_URI environment variable inside .env.local');
 }
 
@@ -14,6 +19,11 @@ if (!cached) {
 }
 
 async function dbConnect() {
+  // Validate MONGODB_URI at runtime (not during build)
+  if (!MONGODB_URI) {
+    throw new Error('Please define the MONGODB_URI environment variable inside .env.local');
+  }
+
   if (cached.conn) {
     return cached.conn;
   }
