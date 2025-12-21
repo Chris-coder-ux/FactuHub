@@ -16,10 +16,13 @@ if (!MONGODB_URI) {
   process.exit(1);
 }
 
+// TypeScript ahora sabe que MONGODB_URI es string después de la validación
+const MONGODB_URI_VALIDATED: string = MONGODB_URI;
+
 async function connectDB() {
   try {
     if (mongoose.connection.readyState === 0) {
-      await mongoose.connect(MONGODB_URI);
+      await mongoose.connect(MONGODB_URI_VALIDATED);
       console.log('✅ Conectado a MongoDB');
     }
   } catch (error) {

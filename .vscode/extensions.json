@@ -1,0 +1,16 @@
+{
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "mikestead.dotenv",
+    "usernamehw.errorlens",
+    "redhat.vscode-yaml"
+  ],
+  "unwantedRecommendations": [
+    "sonarsource.sonarlint-vscode",
+    "felixfbecker.php-debug",
+    "astro-build.astro-vscode",
+    "ms-vscode.live-server",
+    "ritwickdey.liveserver"
+  ]
+}

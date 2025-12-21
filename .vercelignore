@@ -1,0 +1,28 @@
+# Scripts de desarrollo/testing - no necesarios en producción
+scripts/
+*.test.ts
+*.test.js
+*.spec.ts
+*.spec.js
+
+# Tests
+cypress/
+__tests__/
+*.test.*
+*.spec.*
+
+# Documentación de desarrollo (mantener solo README.md)
+docs/
+*.md
+!README.md
+
+# Scripts de utilidades y ejemplos
+examples/
+
+# Archivos de desarrollo
+.eslintrc.json
+jest.config.js
+jest.setup.js
+cypress.config.js
+cypress.json
+
