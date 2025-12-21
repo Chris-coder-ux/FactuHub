@@ -8,6 +8,11 @@ export interface User {
   deletedAt?: Date | null;
   createdAt?: Date;
   updatedAt?: Date;
+  // MFA fields
+  mfaEnabled?: boolean;
+  mfaSecret?: string; // Encrypted TOTP secret
+  mfaBackupCodes?: string[]; // Encrypted backup codes
+  mfaVerified?: boolean; // Whether MFA setup is verified
 }
 
 export interface Client {
@@ -38,6 +43,8 @@ export interface Product {
   stock: number;
   alertThreshold: number;
   companyId?: string; // Multi-company support
+  isShared?: boolean; // If true, product is shared with company group
+  sharedWithGroupId?: string | null; // Group ID this product is shared with
   deletedAt?: Date | null;
   createdAt?: Date;
   updatedAt?: Date;
@@ -54,6 +61,7 @@ export interface InvoiceItem {
 export interface Invoice {
   _id?: string;
   invoiceNumber: string;
+  invoiceType?: 'invoice' | 'proforma'; // Tipo de factura: normal o proforma
   client: Client;
   items: InvoiceItem[];
   subtotal: number;
@@ -64,6 +72,16 @@ export interface Invoice {
   issuedDate?: Date;
    notes?: string;
    companyId?: string; // Multi-company support
+   publicToken?: string; // Token seguro para acceso público
+   
+   // Campos del formulario detallado
+   fromAddress?: string;
+   billingAddress?: string;
+   shippingAddress?: string;
+   paymentTerms?: string;
+   invoiceDate?: string;
+   orderNumber?: string;
+   currency?: string;
    deletedAt?: Date | null;
    cancelledAt?: Date;
    cancellationReason?: string;
@@ -214,6 +232,15 @@ export interface Settings {
    verifactuAutoSend?: boolean; // Automatically send invoices to AEAT upon creation
    verifactuAutoEnableForSpain?: boolean; // Automatically enable VeriFactu for Spanish clients
    verifactuChainHash?: string; // Initial chain hash for record chaining (generated automatically)
+   
+   // Fiscal reminders
+   fiscalReminderDays?: number[]; // Days before deadline to send reminders (e.g., [30, 14, 7, 1])
+   fiscalRemindersEnabled?: boolean; // Enable/disable fiscal reminders
+   
+   // Security analysis configuration
+   securityAnalysisEnabled?: boolean; // Enable/disable automated security analysis
+   securityAnalysisFrequency?: '15min' | '30min' | '1hour' | '2hours' | '6hours' | '12hours' | '24hours'; // Frequency of security analysis
+   securityAnalysisLastRun?: Date; // Last time security analysis was run
 }
 
 export interface BankTransaction {

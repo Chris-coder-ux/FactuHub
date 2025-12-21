@@ -17,6 +17,9 @@ export default function AuthPage() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [requiresMFA, setRequiresMFA] = useState(false);
+  const [mfaToken, setMfaToken] = useState('');
+  const [isBackupCode, setIsBackupCode] = useState(false);
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -25,6 +28,25 @@ export default function AuthPage() {
     setError('');
 
     try {
+      // Handle MFA verification
+      if (requiresMFA && mfaToken) {
+        const result = await signIn('credentials', {
+          email: formData.email,
+          password: formData.password,
+          mfaToken: mfaToken,
+          isBackupCode: isBackupCode,
+          redirect: false,
+        });
+
+        if (result?.error) {
+          setError('Código de verificación inválido');
+          return;
+        }
+
+        router.push('/');
+        return;
+      }
+
       if (isSignUp) {
         // Sign up
         const response = await fetch('/api/auth/register', {
@@ -56,15 +78,49 @@ export default function AuthPage() {
 
         router.push('/');
       } else {
-        // Sign in
+        // Sign in with MFA support
+        // First, try login to check if MFA is required
+        const loginResponse = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email: formData.email,
+            password: formData.password,
+          }),
+        });
+
+        const loginData = await loginResponse.json();
+
+        if (loginData.requiresMFA) {
+          // MFA is required, show MFA input
+          setRequiresMFA(true);
+          setError('');
+          return;
+        }
+
+        if (!loginResponse.ok || !loginData.success) {
+          setError(loginData.error || 'Invalid credentials');
+          return;
+        }
+
+        // If MFA not required or already verified, proceed with NextAuth
         const result = await signIn('credentials', {
           email: formData.email,
           password: formData.password,
+          mfaToken: mfaToken || undefined,
+          isBackupCode: isBackupCode,
           redirect: false,
         });
 
         if (result?.error) {
-          setError('Invalid credentials');
+          if (result.error === 'MFA_REQUIRED') {
+            setRequiresMFA(true);
+            setError('');
+          } else {
+            setError('Invalid credentials');
+          }
           return;
         }
 
@@ -142,6 +198,49 @@ export default function AuthPage() {
               />
             </div>
             
+            {requiresMFA && !isSignUp && (
+              <div className="space-y-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <div className="space-y-2">
+                  <Label htmlFor="mfaToken">Código de verificación (6 dígitos)</Label>
+                  <Input
+                    id="mfaToken"
+                    name="mfaToken"
+                    type="text"
+                    required
+                    value={mfaToken}
+                    onChange={(e) => setMfaToken(e.target.value)}
+                    placeholder="000000"
+                    maxLength={6}
+                    pattern="[0-9]{6}"
+                  />
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="isBackupCode"
+                    checked={isBackupCode}
+                    onChange={(e) => setIsBackupCode(e.target.checked)}
+                    className="rounded"
+                  />
+                  <Label htmlFor="isBackupCode" className="text-sm">
+                    Usar código de respaldo
+                  </Label>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setRequiresMFA(false);
+                    setMfaToken('');
+                    setIsBackupCode(false);
+                  }}
+                  className="w-full"
+                >
+                  Volver
+                </Button>
+              </div>
+            )}
+
             {error && (
               <div className="text-red-600 text-sm text-center">
                 {error}
@@ -153,7 +252,7 @@ export default function AuthPage() {
               className="w-full" 
               disabled={loading}
             >
-              {loading ? 'Loading...' : (isSignUp ? 'Sign Up' : 'Sign In')}
+              {loading ? 'Loading...' : (requiresMFA ? 'Verificar' : (isSignUp ? 'Sign Up' : 'Sign In'))}
             </Button>
           </form>
           

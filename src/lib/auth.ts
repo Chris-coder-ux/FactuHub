@@ -28,6 +28,50 @@ export const authOptions = {
             throw new Error('Invalid password');
           }
 
+          // Check if MFA is required
+          const { isMFARequired } = await import('@/lib/services/mfa-service');
+          if (isMFARequired(user.mfaEnabled || false, user.mfaSecret)) {
+            // MFA is enabled - check if token is provided
+            const mfaToken = (credentials as any)?.mfaToken;
+            if (!mfaToken) {
+              // Return special error to indicate MFA is required
+              throw new Error('MFA_REQUIRED');
+            }
+
+            // Verify MFA token
+            const { verifyTOTP, verifyBackupCode } = await import('@/lib/services/mfa-service');
+            const { decrypt } = await import('@/lib/encryption');
+            const isBackupCode = (credentials as any)?.isBackupCode || false;
+
+            let mfaValid = false;
+
+            if (isBackupCode) {
+              if (!user.mfaBackupCodes || user.mfaBackupCodes.length === 0) {
+                throw new Error('No backup codes available');
+              }
+              const decryptedCodes = await Promise.all(
+                user.mfaBackupCodes.map((code: string) => decrypt(code))
+              );
+              const result = verifyBackupCode(mfaToken, decryptedCodes);
+              if (result.valid) {
+                mfaValid = true;
+                // Update backup codes
+                const { encrypt } = await import('@/lib/encryption');
+                user.mfaBackupCodes = await Promise.all(
+                  result.remainingCodes.map((code: string) => encrypt(code))
+                );
+                await user.save();
+              }
+            } else {
+              const decryptedSecret = await decrypt(user.mfaSecret!);
+              mfaValid = verifyTOTP(mfaToken, decryptedSecret);
+            }
+
+            if (!mfaValid) {
+              throw new Error('Invalid MFA token');
+            }
+          }
+
           return {
             id: user._id.toString(),
             email: user.email,
@@ -36,6 +80,10 @@ export const authOptions = {
           };
         } catch (error) {
           console.error('Auth error:', error);
+          // Don't return null for MFA_REQUIRED - let it propagate
+          if (error instanceof Error && error.message === 'MFA_REQUIRED') {
+            throw error;
+          }
           return null;
         }
       },
@@ -45,6 +93,10 @@ export const authOptions = {
     strategy: 'jwt' as const,
   },
   callbacks: {
+    async signOut() {
+      // Clear any custom session data on signout
+      return true;
+    },
     async jwt({ token, user, trigger, session: sessionData }: { token: JWT; user?: User; trigger?: string; session?: Session }) {
       if (user) {
         token.role = user.role;
@@ -84,6 +136,7 @@ export const authOptions = {
   },
   pages: {
     signIn: '/auth',
+    signOut: '/auth',
   },
 };
 
