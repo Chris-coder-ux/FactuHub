@@ -33,7 +33,8 @@ import {
   DollarSign,
   LineChart,
   Building2,
-  Code
+  Code,
+  type LucideIcon
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from './ui/button';
@@ -41,13 +42,13 @@ import { Button } from './ui/button';
 interface NavItem {
   href: string;
   label: string;
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: LucideIcon;
 }
 
 interface NavGroup {
   id: string;
   label: string;
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: LucideIcon;
   items: NavItem[];
   defaultOpen?: boolean;
 }
