@@ -37,8 +37,8 @@ const nextConfig = {
       '@radix-ui/react-select',
       '@radix-ui/react-dropdown-menu',
     ],
-    // Optimizar CSS
-    optimizeCss: true,
+    // Optimizar CSS (deshabilitado temporalmente por problemas en build)
+    // optimizeCss: true,
   },
   
   // Configuración de webpack para mejor tree-shaking
@@ -48,7 +48,7 @@ const nextConfig = {
       config.optimization = {
         ...config.optimization,
         usedExports: true, // Habilitar tree-shaking
-        sideEffects: false, // Indicar que no hay side effects
+        // sideEffects: false removido - CSS tiene side effects y causa errores en build
       };
     }
     
