@@ -5,6 +5,8 @@ import { requireCompanyPermission } from '@/lib/company-rbac';
 import { AuditService } from '@/lib/services/audit-service';
 import { logger } from '@/lib/logger';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     // Require company context
