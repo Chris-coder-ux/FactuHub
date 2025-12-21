@@ -11,6 +11,7 @@ const invoiceItemSchema = new Schema({
 
 const invoiceSchema = new Schema<Invoice>({
   invoiceNumber: { type: String, required: true, unique: true },
+  invoiceType: { type: String, enum: ['invoice', 'proforma'], default: 'invoice', index: true },
   client: { type: Schema.Types.ObjectId, ref: 'Client', required: true },
   items: [invoiceItemSchema],
   subtotal: { type: Number, required: true },
@@ -22,6 +23,7 @@ const invoiceSchema = new Schema<Invoice>({
   notes: { type: String },
   deletedAt: { type: Date, default: null },
   companyId: { type: Schema.Types.ObjectId, ref: 'Company', index: true },
+  publicToken: { type: String, sparse: true, unique: true, index: true }, // Token seguro para acceso público
 
   // VeriFactu fields
   verifactuId: { type: String, sparse: true },
@@ -44,5 +46,6 @@ const invoiceSchema = new Schema<Invoice>({
 invoiceSchema.index({ companyId: 1, deletedAt: 1 });
 invoiceSchema.index({ companyId: 1, status: 1 });
 invoiceSchema.index({ companyId: 1, createdAt: -1 });
+invoiceSchema.index({ companyId: 1, invoiceType: 1 }); // Para filtrar por tipo
 
 export default mongoose.models.Invoice || mongoose.model<Invoice>('Invoice', invoiceSchema);

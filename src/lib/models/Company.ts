@@ -11,6 +11,7 @@ export interface ICompany extends Document {
     country: string;
   };
   ownerId: mongoose.Types.ObjectId; // User who created it
+  groupId: mongoose.Types.ObjectId | null; // Group ID for sharing resources (null = no group)
   members: {
     userId: mongoose.Types.ObjectId;
     role: 'owner' | 'admin' | 'accountant' | 'sales' | 'client';
@@ -36,6 +37,7 @@ const CompanySchema = new Schema<ICompany>({
     country: { type: String, default: 'España' },
   },
   ownerId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  groupId: { type: Schema.Types.ObjectId, ref: 'CompanyGroup', default: null }, // Group for sharing resources
   members: [{
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     role: { type: String, enum: ['owner', 'admin', 'accountant', 'sales', 'client'], default: 'client' },
@@ -49,5 +51,8 @@ const CompanySchema = new Schema<ICompany>({
 }, {
   timestamps: true,
 });
+
+// Índice para búsquedas por grupo
+CompanySchema.index({ groupId: 1 });
 
 export default mongoose.models.Company || mongoose.model<ICompany>('Company', CompanySchema);

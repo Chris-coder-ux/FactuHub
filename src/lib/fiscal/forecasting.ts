@@ -105,10 +105,26 @@ async function getHistoricalData(userId: string): Promise<ForecastingData> {
 
 export async function getFiscalCalendar(year: number): Promise<{ quarter: number; dueDate: Date }[]> {
   // IVA quarterly deadlines: April 20, July 20, October 20, January 30 next year
+  // Note: Q1 deadline is in January of the following year
+  const currentYear = new Date().getFullYear();
+  const isCurrentYear = year === currentYear;
+  
   return [
-    { quarter: 1, dueDate: new Date(year + 1, 0, 30) }, // January 30 next year (Q1 previous year)
-    { quarter: 2, dueDate: new Date(year, 3, 20) }, // April 20
-    { quarter: 3, dueDate: new Date(year, 6, 20) }, // July 20
-    { quarter: 4, dueDate: new Date(year, 9, 20) }, // October 20
+    { 
+      quarter: 1, 
+      dueDate: new Date(year + 1, 0, 30) // January 30 next year (Q1 of current year)
+    },
+    { 
+      quarter: 2, 
+      dueDate: new Date(year, 3, 20) // April 20
+    },
+    { 
+      quarter: 3, 
+      dueDate: new Date(year, 6, 20) // July 20
+    },
+    { 
+      quarter: 4, 
+      dueDate: new Date(year, 9, 20) // October 20
+    },
   ];
 }

@@ -46,7 +46,7 @@ export default function BankingTransactionsPage() {
   const { data: accountsData } = useSWR<{ data: BankAccount[] }>('/api/banking/accounts', fetcher);
   const bankAccounts = accountsData?.data || [];
 
-  const transactions = data?.data || [];
+  const transactions = useMemo(() => data?.data || [], [data?.data]);
   const pagination = data?.pagination;
 
   // Calculate statistics

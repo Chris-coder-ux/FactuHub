@@ -6,13 +6,14 @@ import { Product } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { fetcher } from '@/lib/fetcher';
 import { ProductForm } from '@/components/forms/ProductForm';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/EmptyState';
-import { Search, Plus, Package, Pencil, Trash2, AlertTriangle } from 'lucide-react';
+import { Search, Plus, Package, Pencil, Trash2, AlertTriangle, Share2, X } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface ProductsResponse {
@@ -79,6 +80,23 @@ export default function ProductsPage() {
     );
   };
 
+  const handleShare = async (product: Product, share: boolean) => {
+    try {
+      const method = share ? 'POST' : 'DELETE';
+      const res = await fetch(`/api/products/${product._id}/share`, { method });
+      
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || 'Error al compartir producto');
+      }
+      
+      mutate('/api/products');
+      toast.success(share ? 'Producto compartido con el grupo' : 'Producto descompartido del grupo');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al compartir producto');
+    }
+  };
+
   if (error) return <div className="p-6 text-destructive">Error al cargar productos</div>;
 
   return (
@@ -100,6 +118,11 @@ export default function ProductsPage() {
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
               <DialogTitle>{editingProduct ? 'Editar Producto' : 'Nuevo Producto'}</DialogTitle>
+              <DialogDescription>
+                {editingProduct 
+                  ? 'Modifica los datos del producto y guarda los cambios.' 
+                  : 'Completa el formulario para crear un nuevo producto o servicio.'}
+              </DialogDescription>
             </DialogHeader>
             <ProductForm 
               initialData={editingProduct || undefined} 
@@ -166,7 +189,14 @@ export default function ProductsPage() {
                        <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
                           <Package size={16} />
                        </div>
-                       {product.name}
+                       <div className="flex flex-col">
+                         <span>{product.name}</span>
+                         {product.isShared && (
+                           <Badge variant="outline" className="text-xs mt-1 w-fit bg-blue-50 text-blue-700 border-blue-200">
+                             Compartido
+                           </Badge>
+                         )}
+                       </div>
                     </div>
                   </TableCell>
                   <TableCell className="max-w-xs truncate text-muted-foreground">{product.description}</TableCell>
@@ -183,6 +213,21 @@ export default function ProductsPage() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {product.companyId && (
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => handleShare(product, !product.isShared)} 
+                          className="h-8 w-8 hover:text-blue-600"
+                          title={product.isShared ? 'Descompartir del grupo' : 'Compartir con el grupo'}
+                        >
+                          {product.isShared ? (
+                            <X className="h-4 w-4" />
+                          ) : (
+                            <Share2 className="h-4 w-4" />
+                          )}
+                        </Button>
+                      )}
                       <Button variant="ghost" size="icon" onClick={() => handleEdit(product)} className="h-8 w-8 hover:text-primary">
                         <Pencil className="h-4 w-4" />
                       </Button>

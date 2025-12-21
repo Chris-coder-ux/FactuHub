@@ -12,10 +12,22 @@ import { toast } from 'sonner';
 import { EmptyState } from '@/components/EmptyState';
 import { Search, Receipt, Eye, Edit, Trash2, Plus, CheckCircle, XCircle, Clock, Filter, Download, FileText, BarChart3 } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { ExpenseForm } from '@/components/forms/ExpenseForm';
-import { ExpenseReportsDialog } from '@/components/expenses/ExpenseReportsDialog';
+import dynamic from 'next/dynamic';
 import { Expense } from '@/types';
 import Link from 'next/link';
+import { Skeleton } from '@/components/ui/skeleton';
+
+// Lazy load heavy components to reduce initial bundle size
+const ExpenseForm = dynamic(() => import('@/components/forms/ExpenseForm').then(mod => ({ default: mod.ExpenseForm })), {
+  loading: () => <Skeleton className="h-96 w-full" />,
+  ssr: false
+});
+
+// ExpenseReportsDialog uses ExcelJS which is very heavy (~2MB), load only when dialog opens
+const ExpenseReportsDialog = dynamic(() => import('@/components/expenses/ExpenseReportsDialog').then(mod => ({ default: mod.ExpenseReportsDialog })), {
+  loading: () => <Skeleton className="h-64 w-full" />,
+  ssr: false
+});
 
 interface ExpensesResponse {
   data: Expense[];

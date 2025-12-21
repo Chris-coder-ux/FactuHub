@@ -1,12 +1,37 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import dynamic from 'next/dynamic';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
-import { Calendar, TrendingUp, Euro, Loader2, AlertTriangle } from 'lucide-react';
+import { Calendar, TrendingUp, Euro, Loader2, AlertTriangle, Bell } from 'lucide-react';
+import { FiscalDeadlineAlerts } from '@/components/fiscal/FiscalDeadlineAlerts';
 import { toast } from 'sonner';
+import { Skeleton } from '@/components/ui/skeleton';
+import { logger } from '@/lib/logger';
+
+// Lazy load heavy components to reduce initial bundle size
+const FiscalCalendar = dynamic(() => import('@/components/fiscal/FiscalCalendar').then(mod => ({ default: mod.FiscalCalendar })), {
+  loading: () => <Skeleton className="h-96 w-full" />,
+  ssr: false
+});
+
+const FiscalTrendsChart = dynamic(() => import('@/components/fiscal/FiscalTrendsChart').then(mod => ({ default: mod.FiscalTrendsChart })), {
+  loading: () => <Skeleton className="h-96 w-full" />,
+  ssr: false
+});
+
+const WhatIfAnalysis = dynamic(() => import('@/components/fiscal/WhatIfAnalysis').then(mod => ({ default: mod.WhatIfAnalysis })), {
+  loading: () => <Skeleton className="h-96 w-full" />,
+  ssr: false
+});
+
+const FiscalAccuracyMetrics = dynamic(() => import('@/components/fiscal/FiscalAccuracyMetrics').then(mod => ({ default: mod.FiscalAccuracyMetrics })), {
+  loading: () => <Skeleton className="h-96 w-full" />,
+  ssr: false
+});
 
 interface FiscalProjection {
   _id: string;
@@ -18,17 +43,25 @@ interface FiscalProjection {
   confidence: number;
 }
 
+interface FiscalDeadline {
+  id: string;
+  quarter?: number;
+  type: 'iva' | 'irpf' | 'other';
+  title: string;
+  description: string;
+  dueDate: Date;
+  status: 'upcoming' | 'due-soon' | 'overdue' | 'completed';
+  daysUntil: number;
+}
+
 export default function FiscalPage() {
   const [projections, setProjections] = useState<FiscalProjection[]>([]);
+  const [deadlines, setDeadlines] = useState<FiscalDeadline[]>([]);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
-  useEffect(() => {
-    fetchProjections();
-  }, [selectedYear]);
-
-  const fetchProjections = async () => {
+  const fetchProjections = useCallback(async () => {
     setLoading(true);
     try {
       const response = await fetch(`/api/fiscal/projections?year=${selectedYear}`);
@@ -39,7 +72,25 @@ export default function FiscalPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedYear]);
+
+  const fetchDeadlines = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/fiscal/calendar?year=${selectedYear}`);
+      const data = await response.json();
+      setDeadlines(data.deadlines.map((d: any) => ({
+        ...d,
+        dueDate: new Date(d.dueDate),
+      })));
+    } catch (error) {
+      logger.error('Error fetching deadlines', error);
+    }
+  }, [selectedYear]);
+
+  useEffect(() => {
+    fetchProjections();
+    fetchDeadlines();
+  }, [fetchProjections, fetchDeadlines]);
 
   const generateProjections = async (type: 'iva' | 'irpf') => {
     setGenerating(true);
@@ -190,63 +241,26 @@ export default function FiscalPage() {
         </div>
       )}
 
-      {/* Fiscal Alerts */}
-      {getUpcomingDeadlines(selectedYear).length > 0 && (
-        <Card className="border-amber-200 bg-amber-50/50">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-amber-800">
-              <AlertTriangle className="h-5 w-5" />
-              Próximas Fechas Límite
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {getUpcomingDeadlines(selectedYear).map((deadline, index) => (
-                <div key={index} className="flex items-center justify-between p-3 bg-white rounded border border-amber-200">
-                  <div>
-                    <p className="font-medium">IVA Trimestre {deadline.quarter}</p>
-                    <p className="text-sm text-muted-foreground">Modelo 303</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-medium">{deadline.date.toLocaleDateString('es-ES')}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {Math.ceil((deadline.date.getTime() - Date.now()) / (1000 * 60 * 60 * 24))} días
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Enhanced Fiscal Deadline Alerts */}
+      <FiscalDeadlineAlerts year={selectedYear} />
 
-      {/* Fiscal Calendar */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Calendario Fiscal {selectedYear}</CardTitle>
-          <CardDescription>Fechas límite para declaraciones</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="p-4 border rounded-lg text-center">
-              <h4 className="font-semibold">IVA Q1</h4>
-              <p className="text-sm text-muted-foreground">30 enero {selectedYear + 1}</p>
-            </div>
-            <div className="p-4 border rounded-lg text-center">
-              <h4 className="font-semibold">IVA Q2</h4>
-              <p className="text-sm text-muted-foreground">20 abril {selectedYear}</p>
-            </div>
-            <div className="p-4 border rounded-lg text-center">
-              <h4 className="font-semibold">IVA Q3</h4>
-              <p className="text-sm text-muted-foreground">20 julio {selectedYear}</p>
-            </div>
-            <div className="p-4 border rounded-lg text-center">
-              <h4 className="font-semibold">IVA Q4</h4>
-              <p className="text-sm text-muted-foreground">20 octubre {selectedYear}</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Fiscal Calendar Component */}
+      <FiscalCalendar
+        year={selectedYear}
+        deadlines={deadlines}
+        onDeadlineClick={(deadline) => {
+          toast.info(`${deadline.title}: ${deadline.description}`);
+        }}
+      />
+
+      {/* Advanced Trends Charts */}
+      <FiscalTrendsChart selectedYear={selectedYear} />
+
+      {/* What-If Analysis */}
+      <WhatIfAnalysis selectedYear={selectedYear} />
+
+      {/* Accuracy Metrics */}
+      <FiscalAccuracyMetrics selectedYear={selectedYear} />
     </div>
   );
 }

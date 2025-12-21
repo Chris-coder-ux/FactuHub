@@ -76,7 +76,7 @@ export async function reconcileTransactions(bankAccountId: string, userId: strin
   }
 }
 
-function findMatches(bankTransaction: any, invoices: any[]): MatchResult[] {
+export function findMatches(bankTransaction: any, invoices: any[]): MatchResult[] {
   const matches: MatchResult[] = [];
 
   for (const invoice of invoices) {

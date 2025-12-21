@@ -2,7 +2,7 @@
 // Handles SOAP communication with AEAT web services using certificate authentication
 
 import * as https from 'https';
-import * as fs from 'fs';
+import { readFileSync } from 'node:fs';
 import * as crypto from 'crypto';
 import { VeriFactuConfig } from './types';
 import { logger } from '@/lib/logger';
@@ -37,7 +37,7 @@ export class VeriFactuAeatClient {
 
   private createHttpsAgent(): https.Agent {
     // Create certificate-based authentication
-    const cert = fs.readFileSync(this.config.certificate.path);
+    const cert = readFileSync(this.config.certificate.path);
     const key = cert; // For P12 certificates, key is same as cert
 
     return new https.Agent({
@@ -261,11 +261,11 @@ export class VeriFactuAeatClient {
    */
   validateCertificate(): boolean {
     try {
-      const cert = fs.readFileSync(this.config.certificate.path);
+      const cert = readFileSync(this.config.certificate.path);
       // Basic validation - check if file exists and has content
       return cert.length > 0;
     } catch (error) {
-      console.error('Certificate validation failed:', error);
+      logger.error('Certificate validation failed', error);
       return false;
     }
   }
@@ -275,7 +275,7 @@ export class VeriFactuAeatClient {
    */
   getCertificateInfo(): any {
     try {
-      const cert = fs.readFileSync(this.config.certificate.path);
+      const cert = readFileSync(this.config.certificate.path);
       // This is a simplified info - in production you might want to parse the certificate
       return {
         size: cert.length,

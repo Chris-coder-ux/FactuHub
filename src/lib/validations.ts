@@ -36,15 +36,26 @@ export const invoiceItemSchema = z.object({
   price: z.number().min(0, { message: 'Price cannot be negative' }),
   tax: z.number().min(0, { message: 'Tax cannot be negative' }).default(0),
   total: z.number().min(0, { message: 'Total cannot be negative' }),
+  description: z.string().optional(),
 });
 
 export const invoiceSchema = z.object({
   invoiceNumber: z.string().optional(),
+  invoiceType: z.enum(['invoice', 'proforma']).default('invoice'),
   client: z.string().min(1, { message: 'Client ID is required' }),
   items: z.array(invoiceItemSchema).min(1, { message: 'At least one item is required' }),
   dueDate: z.string().min(1, { message: 'Due date is required' }),
   notes: z.string().optional(),
   status: z.enum(['draft', 'sent', 'paid', 'overdue', 'cancelled']).default('draft'),
+  
+  // Campos del formulario detallado
+  fromAddress: z.string().optional(),
+  billingAddress: z.string().optional(),
+  shippingAddress: z.string().optional(),
+  paymentTerms: z.string().optional(),
+  invoiceDate: z.string().optional(),
+  orderNumber: z.string().optional(),
+  currency: z.string().optional(),
 
   // VeriFactu fields
   verifactuId: z.string().optional(),

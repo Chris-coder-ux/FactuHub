@@ -34,7 +34,6 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { Invoice } from '@/types';
 import { PaginatedResponse } from '@/lib/pagination';
-import { generateInvoicePDF } from '@/lib/pdf-generator';
 
 const getBadgeVariant = (status: string): "default" | "secondary" | "destructive" | "outline" | null => {
   const variants: Record<string, "default" | "secondary" | "destructive"> = {
@@ -98,6 +97,7 @@ export default function InvoicesPage() {
   const { status: authStatus } = useSession();
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'invoice' | 'proforma'>('all');
   const [sortConfig, setSortConfig] = useState<{ key: keyof Invoice | 'client', direction: 'asc' | 'desc' } | null>(null);
 
   const { data: invoicesData, isLoading, mutate } = useSWR<PaginatedResponse<Invoice>>(
@@ -106,8 +106,15 @@ export default function InvoicesPage() {
   );
 
   const invoices = useMemo(() => {
-    return filterAndSortInvoices(invoicesData?.data || [], searchQuery, sortConfig);
-  }, [invoicesData, searchQuery, sortConfig]);
+    let filtered = invoicesData?.data || [];
+    
+    // Filtrar por tipo
+    if (typeFilter !== 'all') {
+      filtered = filtered.filter(inv => (inv as any).invoiceType === typeFilter);
+    }
+    
+    return filterAndSortInvoices(filtered, searchQuery, sortConfig);
+  }, [invoicesData, searchQuery, sortConfig, typeFilter]);
 
   const handleSort = (key: keyof Invoice | 'client') => {
     setSortConfig(prev => {
@@ -157,14 +164,25 @@ export default function InvoicesPage() {
         </div>
       </div>
 
-      <div className="flex items-center space-x-2 bg-card p-1 rounded-lg border shadow-sm max-w-md">
-        <Search className="h-5 w-5 text-muted-foreground ml-2" />
-        <Input 
-          placeholder="Buscar por número o cliente..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="border-none shadow-none focus-visible:ring-0"
-        />
+      <div className="flex items-center gap-4 flex-wrap">
+        <div className="flex items-center space-x-2 bg-card p-1 rounded-lg border shadow-sm max-w-md flex-1 min-w-[200px]">
+          <Search className="h-5 w-5 text-muted-foreground ml-2" />
+          <Input 
+            placeholder="Buscar por número o cliente..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="border-none shadow-none focus-visible:ring-0"
+          />
+        </div>
+        <select
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value as 'all' | 'invoice' | 'proforma')}
+          className="px-4 py-2 border rounded-md bg-background"
+        >
+          <option value="all">Todos los tipos</option>
+          <option value="invoice">Facturas</option>
+          <option value="proforma">Proformas</option>
+        </select>
       </div>
 
       <motion.div 
@@ -237,7 +255,16 @@ export default function InvoicesPage() {
                       exit={{ opacity: 0 }}
                       className="group border-b hover:bg-muted/30 transition-colors"
                     >
-                      <TableCell className="font-semibold">{invoice.invoiceNumber || 'Borrador'}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold">{invoice.invoiceNumber || 'Borrador'}</span>
+                          {(invoice as any).invoiceType === 'proforma' && (
+                            <Badge variant="outline" className="bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 border-yellow-300 dark:border-yellow-700 text-[10px] px-2 py-0">
+                              PROFORMA
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <div className="flex flex-col">
                           <span className="font-medium">{invoice.client?.name || 'Cliente eliminado'}</span>
@@ -286,11 +313,14 @@ export default function InvoicesPage() {
                           <Button 
                             variant="ghost" 
                             size="icon" 
-                            onClick={() => generateInvoicePDF(invoice, null)}
+                            onClick={async () => {
+                              const { generateInvoicePDF } = await import('@/lib/pdf-generator');
+                              generateInvoicePDF(invoice, null);
+                            }}
                             title="Descargar PDF"
                             className="h-8 w-8 hover:text-emerald-600"
                           >
-                              <FileDown size={16} />
+                            <FileDown size={16} />
                           </Button>
                         </div>
                       </TableCell>

@@ -2,10 +2,9 @@
 // Implements XAdES-BES signatures using certificates
 
 import * as forge from 'node-forge';
-import * as fs from 'fs';
-import * as path from 'path';
-import { createHash } from 'crypto';
-import moment from 'moment';
+import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { formatInTimeZone } from 'date-fns-tz';
 
 export class VeriFactuSigner {
   private certificate!: forge.pki.Certificate;
@@ -19,7 +18,7 @@ export class VeriFactuSigner {
   private loadCertificate(certificatePath: string, password: string): void {
     try {
       // Read PFX/P12 file
-      const p12Data = fs.readFileSync(certificatePath);
+      const p12Data = readFileSync(certificatePath);
       const p12Asn1 = forge.asn1.fromDer(p12Data.toString('binary'));
 
       // Decrypt P12
@@ -89,7 +88,7 @@ export class VeriFactuSigner {
   }
 
   private createXAdESSignature(canonicalXml: string, digestValue: string): string {
-    const now = moment().utc().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]');
+    const now = formatInTimeZone(new Date(), 'UTC', "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
     const signatureId = `Signature-${Date.now()}`;
     const signedPropertiesId = `SignedProperties-${Date.now()}`;
 

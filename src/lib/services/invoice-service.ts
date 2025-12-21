@@ -9,6 +9,17 @@ import { invoiceSchema } from '@/lib/validations';
 import { z } from 'zod';
 import mongoose from 'mongoose';
 import { sanitizeObject } from '@/lib/sanitization';
+import { randomBytes } from 'node:crypto';
+
+/**
+ * Genera un token seguro único para acceso público a facturas
+ * Usa crypto.randomBytes para generar un token no predecible
+ */
+function generatePublicToken(): string {
+  // Genera 32 bytes (256 bits) de datos aleatorios y los convierte a hex
+  // Resultado: token de 64 caracteres hexadecimales
+  return randomBytes(32).toString('hex');
+}
 
 export class InvoiceService {
   /**
@@ -60,12 +71,16 @@ export class InvoiceService {
 
       const invoiceNumber = `INV-${String(counter.seq).padStart(4, '0')}`;
 
+      // Generate secure public token for public access
+      const publicToken = generatePublicToken();
+
       const invoice = new Invoice({
         ...sanitizedData,
         invoiceNumber,
         issuedDate: new Date(),
         status: 'draft',
         companyId: toCompanyObjectId(companyId),
+        publicToken, // Secure token for public access
       });
 
       // Save invoice within transaction
@@ -100,8 +115,14 @@ export class InvoiceService {
 
   /**
    * Checks if an invoice should be processed with VeriFactu
+   * Proforma invoices are NEVER processed with VeriFactu (they have no fiscal validity)
    */
   static shouldProcessVeriFactu(invoice: any, settings: any): boolean {
+    // Proforma invoices should NEVER be sent to VeriFactu/AEAT
+    if (invoice.invoiceType === 'proforma') {
+      return false;
+    }
+
     // Check if client is Spanish (ES country or Spanish tax ID format)
     const isSpanishClient =
       invoice.client.address?.country === 'ES' ||

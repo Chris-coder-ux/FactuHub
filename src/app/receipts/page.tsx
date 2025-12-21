@@ -10,7 +10,14 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { fetcher } from '@/lib/fetcher';
 import { ReceiptUpload } from '@/components/ReceiptUpload';
-import { OCRAccuracyMetrics } from '@/components/receipts/OCRAccuracyMetrics';
+import dynamic from 'next/dynamic';
+import { Skeleton } from '@/components/ui/skeleton';
+
+// Lazy load heavy OCR metrics component
+const OCRAccuracyMetrics = dynamic(() => import('@/components/receipts/OCRAccuracyMetrics').then(mod => ({ default: mod.OCRAccuracyMetrics })), {
+  loading: () => <Skeleton className="h-64 w-full" />,
+  ssr: false
+});
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { EmptyState } from '@/components/EmptyState';

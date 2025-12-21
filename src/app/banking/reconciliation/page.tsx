@@ -1,11 +1,18 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import useSWR from 'swr';
 import { fetcher } from '@/lib/fetcher';
-import { ReconciliationDashboard } from '@/components/banking/ReconciliationDashboard';
 import { BankAccount } from '@/types';
 import { EmptyState } from '@/components/EmptyState';
 import { Calculator } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+
+// Lazy load heavy reconciliation dashboard component
+const ReconciliationDashboard = dynamic(() => import('@/components/banking/ReconciliationDashboard').then(mod => ({ default: mod.ReconciliationDashboard })), {
+  loading: () => <Skeleton className="h-96 w-full" />,
+  ssr: false
+});
 
 export default function BankingReconciliationPage() {
   const { data: accountsData, error } = useSWR<{ data: BankAccount[] }>('/api/banking/accounts', fetcher);
