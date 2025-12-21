@@ -188,24 +188,24 @@ export default function Sidebar() {
       animate={{ width: isCollapsed ? 80 : 260 }}
       transition={{ type: "spring", stiffness: 300, damping: 30 }}
       className={cn(
-        "relative z-50 hidden md:flex flex-col border-r bg-card/50 backdrop-blur-xl h-screen sticky top-0 border-border/50 shadow-sm",
+        "relative z-50 hidden md:flex flex-col border-r bg-card h-screen sticky top-0 border-border shadow-sm",
         isCollapsed ? "items-center" : ""
       )}
     >
       {/* Logo Section */}
-      <div className={cn("flex items-center h-20 px-6 border-b border-border/50", isCollapsed ? "justify-center px-0" : "justify-between")}>
+      <div className={cn("flex items-center h-20 px-6 border-b border-border", isCollapsed ? "justify-center px-0" : "justify-between")}>
         <AnimatePresence mode="wait">
           {!isCollapsed && (
             <motion.div 
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -10 }}
-              className="flex items-center gap-2"
+              className="flex items-center gap-3"
             >
-               <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-violet-600 flex items-center justify-center shadow-lg shadow-primary/20">
-                 <span className="text-white font-bold">F</span>
+               <div className="h-9 w-9 rounded-lg bg-primary flex items-center justify-center">
+                 <span className="text-white font-bold text-lg">F</span>
                </div>
-               <span className="font-bold text-xl bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">
+               <span className="font-bold text-xl text-foreground">
                  FacturaHub
                </span>
             </motion.div>
@@ -214,7 +214,7 @@ export default function Sidebar() {
             <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
-              className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-violet-600 flex items-center justify-center shadow-lg shadow-primary/20"
+              className="h-10 w-10 rounded-lg bg-primary flex items-center justify-center"
             >
               <span className="text-white font-bold text-lg">F</span>
             </motion.div>
@@ -248,12 +248,12 @@ export default function Sidebar() {
                 <button
                   onClick={() => toggleGroup(group.id)}
                   className={cn(
-                    "w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-muted/30",
+                    "w-full flex items-center justify-between px-3 py-2 text-sm font-semibold text-foreground/70 hover:text-foreground transition-colors rounded-lg hover:bg-muted/30",
                     isActiveGroup && "text-foreground"
                   )}
                 >
                   <div className="flex items-center gap-2">
-                    <GroupIcon size={14} />
+                    <GroupIcon size={16} />
                     <span>{group.label}</span>
                   </div>
                   {isGroupOpen ? (
@@ -285,22 +285,14 @@ export default function Sidebar() {
                             onMouseEnter={() => setHoveredItem(item.label)}
                             onMouseLeave={() => setHoveredItem(null)}
                             className={cn(
-                              "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-300 relative overflow-hidden",
+                              "flex items-center gap-3 rounded-lg px-3 py-2.5 text-xs font-medium transition-all duration-200 relative",
                               isActive 
-                                ? "text-primary-foreground shadow-md shadow-primary/20" 
-                                : "text-muted-foreground hover:text-foreground hover:bg-muted/50",
+                                ? "text-primary-foreground bg-primary shadow-sm" 
+                                : "text-foreground/60 hover:text-foreground hover:bg-muted",
                               isCollapsed ? "justify-center" : ""
                             )}
                           >
-                            {isActive && (
-                              <motion.div
-                                layoutId="active-nav-bg"
-                                className="absolute inset-0 bg-gradient-to-r from-primary to-violet-600 z-0"
-                                initial={{ borderRadius: 12 }}
-                              />
-                            )}
-                            
-                            <Icon size={20} className={cn("relative z-10 shrink-0 transition-transform duration-300 group-hover:scale-110", isActive && "animate-pulse-subtle")} />
+                            <Icon size={20} className={cn("shrink-0 transition-colors", isActive && "text-primary-foreground")} />
                             
                             <AnimatePresence>
                               {!isCollapsed && (
@@ -349,7 +341,7 @@ export default function Sidebar() {
               {session?.user?.image ? (
                 <Image src={session.user.image} alt="Avatar" width={36} height={36} className="w-full h-full object-cover rounded-full" />
               ) : (
-                <div className="w-full h-full bg-gradient-to-br from-primary to-violet-600 flex items-center justify-center text-white font-bold">
+                <div className="w-full h-full bg-primary flex items-center justify-center text-white font-semibold">
                   {session?.user?.name?.charAt(0) || 'U'}
                 </div>
               )}

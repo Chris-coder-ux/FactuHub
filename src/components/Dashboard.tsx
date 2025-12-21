@@ -38,6 +38,7 @@ import { Badge } from '@/components/ui/badge';
 import { Invoice } from '../types/invoice';
 import { PaginatedResponse } from '@/lib/pagination';
 import { NoCompanyBanner } from '@/components/NoCompanyBanner';
+import { useTheme } from 'next-themes';
 
 // Helper to determine badge color
 const getBadgeVariant = (status: string): "default" | "secondary" | "destructive" | "outline" | null => {
@@ -61,13 +62,13 @@ const containerVariants = {
   visible: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.1
+      staggerChildren: 0.05
     }
   }
 };
 
 const itemVariants = {
-  hidden: { opacity: 0, y: 20 },
+  hidden: { opacity: 0, y: 8 },
   visible: { opacity: 1, y: 0 }
 };
 
@@ -82,6 +83,7 @@ export default function Dashboard() {
   const { status: authStatus } = useSession();
   const router = useRouter();
   const [mounted, setMounted] = React.useState(false);
+  const { theme } = useTheme();
 
   React.useEffect(() => {
     setMounted(true);
@@ -150,15 +152,29 @@ export default function Dashboard() {
       
       {/* Pending Expenses Alert */}
       {pendingExpensesCount > 0 && (
-        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+        <div className={cn(
+          "rounded-lg p-4 shadow-sm border",
+          theme === 'dark' 
+            ? "bg-green-900/20 border-green-800" 
+            : "bg-blue-50 border-blue-200"
+        )}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Bell className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+              <Bell className={cn(
+                "h-5 w-5",
+                theme === 'dark' ? "text-green-400" : "text-blue-600"
+              )} />
               <div>
-                <h3 className="font-semibold text-yellow-900 dark:text-yellow-100">
+                <h3 className={cn(
+                  "font-semibold",
+                  theme === 'dark' ? "text-green-100" : "text-blue-900"
+                )}>
                   {pendingExpensesCount} {pendingExpensesCount === 1 ? 'gasto pendiente' : 'gastos pendientes'} de aprobación
                 </h3>
-                <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                <p className={cn(
+                  "text-sm",
+                  theme === 'dark' ? "text-green-300" : "text-blue-700"
+                )}>
                   Revisa y aprueba los gastos pendientes
                 </p>
               </div>
@@ -174,8 +190,8 @@ export default function Dashboard() {
       
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground">Bienvenido de nuevo. Aquí tienes un resumen de tu negocio.</p>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Dashboard</h1>
+          <p className="text-muted-foreground mt-1">Bienvenido de nuevo. Aquí tienes un resumen de tu negocio.</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => mutate()} disabled={reportsLoading}>
@@ -211,17 +227,17 @@ export default function Dashboard() {
         ) : (
           stats.map((stat) => (
             <motion.div key={stat.title} variants={itemVariants}>
-              <Card className="hover:shadow-lg transition-shadow duration-300 border-none bg-card/50 backdrop-blur-sm shadow-sm">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
-                  <div className={cn("p-2 rounded-lg", stat.bg)}>
+              <Card className="hover:shadow-lg hover:border-primary/20 transition-all duration-200 border border-border">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                  <CardTitle className="text-sm font-medium text-foreground/70">{stat.title}</CardTitle>
+                  <div className={cn("p-2.5 rounded-lg bg-muted", stat.bg)}>
                     <stat.icon className={cn("h-4 w-4", stat.color)} />
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{stat.value}</div>
-                  <p className="text-xs text-muted-foreground mt-1 flex items-center">
-                    <ArrowUpRight className="h-3 w-3 mr-1 text-emerald-500" />
+                  <div className="text-2xl font-bold text-foreground mb-1">{stat.value}</div>
+                  <p className="text-xs text-muted-foreground flex items-center">
+                    <ArrowUpRight className="h-3 w-3 mr-1 text-emerald-600 dark:text-emerald-400" />
                     +12% desde el mes pasado
                   </p>
                 </CardContent>
@@ -232,9 +248,9 @@ export default function Dashboard() {
       </motion.div>
 
       <div className="grid gap-4 grid-cols-1 lg:grid-cols-7">
-        <Card className="lg:col-span-4 border-none bg-card/50 backdrop-blur-sm shadow-sm overflow-hidden">
+        <Card className="lg:col-span-4 border border-border overflow-hidden">
           <CardHeader>
-            <CardTitle>Resumen de Ingresos</CardTitle>
+            <CardTitle className="text-lg font-semibold">Resumen de Ingresos</CardTitle>
           </CardHeader>
           <CardContent className="pl-2">
             <div className="h-[350px] w-full" style={{ minHeight: '350px', width: '100%' }}>
@@ -281,9 +297,9 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card className="lg:col-span-3 border-none bg-card/50 backdrop-blur-sm shadow-sm overflow-hidden flex flex-col">
+        <Card className="lg:col-span-3 border border-border overflow-hidden flex flex-col">
           <CardHeader>
-            <CardTitle>Facturas Recientes</CardTitle>
+            <CardTitle className="text-lg font-semibold">Facturas Recientes</CardTitle>
           </CardHeader>
           <CardContent className="flex-1 overflow-auto">
             {(() => {
@@ -310,7 +326,7 @@ export default function Dashboard() {
               return recentInvoices.slice(0, 5).map((invoice: Invoice) => {
                 const badgeVariant = getBadgeVariant(invoice.status);
                 return (
-                  <div key={invoice._id} className="flex items-center justify-between p-3 border-b border-border/50 hover:bg-muted/30 transition-colors">
+                  <div key={invoice._id} className="flex items-center justify-between p-3 border-b border-border hover:bg-muted/50 transition-colors">
                     <div className="space-y-0.5">
                       <p className="text-sm font-medium">{invoice.client?.name || 'Cliente eliminado'}</p>
                       <p className="text-xs text-muted-foreground">{invoice.invoiceNumber || 'Borrador'}</p>

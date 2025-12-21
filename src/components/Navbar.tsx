@@ -38,7 +38,7 @@ export default function Navbar() {
   const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
   return (
-    <nav className="sticky top-0 z-40 bg-background/80 backdrop-blur-md border-b border-border/40 w-full">
+    <nav className="sticky top-0 z-40 bg-background border-b border-border w-full shadow-sm">
       <div className="flex justify-between items-center px-6 py-3">
         
         {/* Left Side: Mobile Toggle & Breadcrumbs */}
@@ -117,14 +117,14 @@ export default function Navbar() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setMobileMenuOpen(false)}
-              className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 md:hidden"
+              className="fixed inset-0 bg-background/95 z-50 md:hidden"
             />
             <motion.div
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: "spring", damping: 20 }}
-              className="fixed inset-y-0 left-0 w-3/4 max-w-xs bg-card border-r border-border z-50 p-6 flex flex-col md:hidden shadow-2xl"
+              className="fixed inset-y-0 left-0 w-3/4 max-w-xs bg-card border-r border-border z-50 p-6 flex flex-col md:hidden shadow-lg"
             >
               <div className="flex items-center justify-between mb-8">
                 <span className="font-bold text-xl">Menú</span>

@@ -164,7 +164,7 @@ export function SupportTicketsList() {
             return (
               <Card 
                 key={ticket._id} 
-                className="hover:shadow-md transition-shadow cursor-pointer"
+                className="hover:shadow-md transition-all duration-200 cursor-pointer border border-border"
                 onClick={() => window.location.href = `/support/tickets/${ticket._id}`}
               >
                 <CardHeader>

@@ -23,7 +23,7 @@ export default function MainLayout({ children }: Readonly<{ children: React.Reac
           <Sidebar />
           <div className="flex-1 flex flex-col min-h-screen relative overflow-x-hidden">
             <Navbar />
-            <main className="flex-1 p-4 md:p-6 lg:p-8 animate-in fade-in duration-500">
+            <main className="flex-1 p-4 md:p-6 lg:p-8 bg-muted/30">
               {children}
             </main>
           </div>
