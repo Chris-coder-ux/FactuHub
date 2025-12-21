@@ -31,6 +31,15 @@ const settingsSchema = new Schema<Settings>({
    verifactuAutoSend: { type: Boolean, default: false },
    verifactuAutoEnableForSpain: { type: Boolean, default: true },
    verifactuChainHash: { type: String },
+   
+   // Fiscal reminders
+   fiscalReminderDays: { type: [Number], default: [30, 14, 7, 1] }, // Days before deadline to send reminders
+   fiscalRemindersEnabled: { type: Boolean, default: true },
+   
+   // Security analysis configuration
+   securityAnalysisEnabled: { type: Boolean, default: true },
+   securityAnalysisFrequency: { type: String, enum: ['15min', '30min', '1hour', '2hours', '6hours', '12hours', '24hours'], default: '1hour' },
+   securityAnalysisLastRun: { type: Date },
 }, {
   timestamps: true,
 });
