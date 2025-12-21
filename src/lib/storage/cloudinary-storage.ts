@@ -58,8 +58,16 @@ export class CloudinaryStorage implements StorageService {
           folder: `receipts/${folder}`,
           resource_type: 'image',
           format: 'auto', // Auto-optimize format
-          quality: 'auto', // Auto-optimize quality
+          quality: 'auto:good', // Auto-optimize quality with good balance
           fetch_format: 'auto',
+          transformation: [
+            {
+              width: 2048,
+              height: 2048,
+              crop: 'limit', // Don't crop, just limit size
+              quality: 'auto:good',
+            },
+          ],
           // Add metadata
           context: metadata ? JSON.stringify(metadata) : undefined,
         },
