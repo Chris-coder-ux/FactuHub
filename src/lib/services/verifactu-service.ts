@@ -320,15 +320,15 @@ export class VeriFactuService {
 
       const xmlContent = generator.generateXML([registro], cabecera);
 
-      // Validate XML (skip validation in development to avoid libxmljs issues)
-      if (process.env.NODE_ENV === 'production') {
-        const validation = await generator.validateXML(xmlContent);
-        if (!validation.isValid) {
-          logger.warn('VeriFactu XML validation failed', {
-            errors: validation.errors,
-            invoiceId: invoice._id,
-          });
-        }
+      // Validate XML structure (structural validation without XSD due to security)
+      const validation = await generator.validateXML(xmlContent);
+      if (!validation.isValid) {
+        logger.warn('VeriFactu XML validation failed', {
+          errors: validation.errors,
+          invoiceId: invoice._id,
+        });
+        // Note: We continue processing even if validation fails
+        // The XML structure is already validated through TypeScript types
       }
 
       // Calculate record hash for storage

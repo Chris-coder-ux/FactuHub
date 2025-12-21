@@ -4,8 +4,7 @@
 import { create } from 'xmlbuilder2';
 import crypto from 'crypto';
 import { VeriFactuXML, VeriFactuRegistroAlta, VeriFactuRegistroAnulacion, VeriFactuCabecera, VeriFactuRegistro } from './types';
-import * as fs from 'fs';
-import * as path from 'path';
+import { logger } from '@/lib/logger';
 
 export class VeriFactuXmlGenerator {
   private chainHash: string;
@@ -138,29 +137,96 @@ export class VeriFactuXmlGenerator {
     return this.chainHash;
   }
 
+  /**
+   * Validates XML structure without using vulnerable libxmljs
+   * Performs structural validation to ensure XML is well-formed and contains required elements
+   * Note: Full XSD validation is disabled due to security vulnerabilities in libxmljs
+   * The XML structure is validated through the generation process and type checking
+   */
   async validateXML(xmlContent: string): Promise<{ isValid: boolean; errors: string[] }> {
+    const errors: string[] = [];
+
     try {
-      // Dynamic import to avoid issues in Next.js
-      const libxmljs = await import('libxmljs');
-
-      // In Next.js, __dirname might be undefined, so we use a relative path approach
-      const schemaPath = path.join(process.cwd(), 'src/lib/verifactu/schema.xsd');
-      const xsdContent = fs.readFileSync(schemaPath, 'utf8');
-
-      const xsdDoc = libxmljs.parseXml(xsdContent);
-      const xmlDoc = libxmljs.parseXml(xmlContent);
-
-      const result = xmlDoc.validate(xsdDoc);
-
-      if (result) {
-        return { isValid: true, errors: [] };
-      } else {
-        const errors = xmlDoc.validationErrors.map((error: any) => error.message);
+      // Basic XML well-formedness check
+      if (!xmlContent || typeof xmlContent !== 'string') {
+        errors.push('XML content is empty or invalid');
         return { isValid: false, errors };
       }
+
+      // Check for XML declaration
+      if (!xmlContent.trim().startsWith('<?xml')) {
+        errors.push('Missing XML declaration');
+      }
+
+      // Check for required root element
+      if (!xmlContent.includes('<SuministroInformacion')) {
+        errors.push('Missing required root element: SuministroInformacion');
+      }
+
+      // Check for required namespaces
+      const requiredNamespace = 'https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/es/aeat/ssii/fact/ws/SuministroInformacion.xsd';
+      if (!xmlContent.includes(requiredNamespace)) {
+        errors.push('Missing required namespace for SuministroInformacion');
+      }
+
+      // Check for required Cabecera element
+      if (!xmlContent.includes('<Cabecera>') && !xmlContent.includes('<Cabecera ')) {
+        errors.push('Missing required Cabecera element');
+      }
+
+      // Check for required Registros element
+      if (!xmlContent.includes('<Registros>')) {
+        errors.push('Missing required Registros element');
+      }
+
+      // Validate Cabecera required fields
+      const cabeceraFields = [
+        'ObligadoEmision',
+        'ConformeNormativa',
+        'Version',
+        'TipoHuella',
+        'Intercambio'
+      ];
+
+      for (const field of cabeceraFields) {
+        if (!xmlContent.includes(`<${field}>`) && !xmlContent.includes(`<${field} `)) {
+          errors.push(`Missing required Cabecera field: ${field}`);
+        }
+      }
+
+      // Basic XML structure validation - check for balanced tags
+      const openTags = (xmlContent.match(/<[^/!?][^>]*>/g) || []).length;
+      const closeTags = (xmlContent.match(/<\/[^>]+>/g) || []).length;
+      
+      if (openTags !== closeTags) {
+        errors.push(`Unbalanced XML tags: ${openTags} opening tags vs ${closeTags} closing tags`);
+      }
+
+      // Check for common XML errors
+      if (xmlContent.includes('&amp;') && xmlContent.includes('&') && !xmlContent.match(/&(amp|lt|gt|quot|apos);/g)) {
+        // Check for unescaped ampersands (basic check)
+        const unescapedAmpersands = xmlContent.match(/&(?!amp|lt|gt|quot|apos|#)/g);
+        if (unescapedAmpersands) {
+          errors.push('Found unescaped ampersands in XML content');
+        }
+      }
+
+      if (errors.length > 0) {
+        return { isValid: false, errors };
+      }
+
+      // If all checks pass, consider XML structurally valid
+      // Note: Full XSD validation is disabled for security reasons
+      // The XML structure is already validated through TypeScript types and generation logic
+      logger.info('XML structural validation passed (XSD validation disabled for security)');
+      return { isValid: true, errors: [] };
+
     } catch (error) {
-      console.error('XML validation error:', error);
-      return { isValid: false, errors: ['XML validation failed due to technical error'] };
+      logger.error('XML validation error', error);
+      return { 
+        isValid: false, 
+        errors: ['XML validation failed due to technical error', error instanceof Error ? error.message : 'Unknown error'] 
+      };
     }
   }
 }

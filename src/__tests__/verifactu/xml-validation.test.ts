@@ -144,9 +144,9 @@ describe('VeriFactuXmlGenerator - Advanced Features', () => {
       const xml = generator.generateXML([registroAlta], cabecera);
       const validation = await generator.validateXML(xml);
 
-      // Note: This test might fail if libxmljs is not properly configured
-      // or if the schema file is not accessible in test environment
-      // For now, just test that the method returns a valid structure
+      // Note: Validation now uses structural checks instead of XSD validation
+      // (XSD validation disabled due to security vulnerabilities in libxmljs)
+      // The test verifies that the validation method returns a valid structure
       expect(validation).toHaveProperty('isValid');
       expect(validation).toHaveProperty('errors');
     });
