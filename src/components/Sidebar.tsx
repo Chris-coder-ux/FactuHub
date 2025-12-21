@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -19,22 +19,114 @@ import {
   LogOut,
   Wallet,
   CreditCard,
-  Calculator
+  Calculator,
+  Calendar,
+  UserCog,
+  FileSearch,
+  FileStack,
+  TrendingUp,
+  Shield,
+  HelpCircle,
+  ChevronDown,
+  ChevronUp,
+  ShoppingCart,
+  DollarSign,
+  LineChart,
+  Building2,
+  Code
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from './ui/button';
 
-const navItems = [
-  { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/clients', label: 'Clientes', icon: Users },
-  { href: '/invoices', label: 'Facturas', icon: FileText },
-  { href: '/expenses', label: 'Gastos', icon: Wallet },
-  { href: '/products', label: 'Productos', icon: Package },
-  { href: '/receipts', label: 'Recibos', icon: Receipt },
-  { href: '/banking/transactions', label: 'Transacciones', icon: CreditCard },
-  { href: '/banking/reconciliation', label: 'Conciliación', icon: Calculator },
-  { href: '/reports', label: 'Reportes', icon: BarChart3 },
-  { href: '/settings', label: 'Configuración', icon: Settings },
+interface NavItem {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+}
+
+interface NavGroup {
+  id: string;
+  label: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  items: NavItem[];
+  defaultOpen?: boolean;
+}
+
+const navGroups: NavGroup[] = [
+  {
+    id: 'main',
+    label: 'Principal',
+    icon: LayoutDashboard,
+    items: [
+      { href: '/', label: 'Dashboard', icon: LayoutDashboard },
+    ],
+    defaultOpen: true,
+  },
+  {
+    id: 'sales',
+    label: 'Ventas y Facturación',
+    icon: ShoppingCart,
+    items: [
+      { href: '/clients', label: 'Clientes', icon: Users },
+      { href: '/invoices', label: 'Facturas', icon: FileText },
+      { href: '/products', label: 'Productos', icon: Package },
+    ],
+    defaultOpen: true,
+  },
+  {
+    id: 'finance',
+    label: 'Gastos y Finanzas',
+    icon: DollarSign,
+    items: [
+      { href: '/expenses', label: 'Gastos', icon: Wallet },
+      { href: '/receipts', label: 'Recibos', icon: Receipt },
+      { href: '/banking/transactions', label: 'Transacciones', icon: CreditCard },
+      { href: '/banking/reconciliation', label: 'Conciliación', icon: Calculator },
+    ],
+    defaultOpen: true,
+  },
+  {
+    id: 'analytics',
+    label: 'Análisis y Reportes',
+    icon: LineChart,
+    items: [
+      { href: '/fiscal', label: 'Previsión Fiscal', icon: Calendar },
+      { href: '/reports', label: 'Reportes', icon: BarChart3 },
+      { href: '/analytics', label: 'Analytics', icon: TrendingUp },
+    ],
+    defaultOpen: false,
+  },
+  {
+    id: 'admin',
+    label: 'Administración',
+    icon: Building2,
+    items: [
+      { href: '/teams', label: 'Equipos', icon: UserCog },
+      { href: '/templates', label: 'Plantillas', icon: FileStack },
+      { href: '/audit-logs', label: 'Logs de Auditoría', icon: FileSearch },
+    ],
+    defaultOpen: false,
+  },
+  {
+    id: 'security',
+    label: 'Seguridad y Soporte',
+    icon: Shield,
+    items: [
+      { href: '/security', label: 'Seguridad', icon: Shield },
+      { href: '/support', label: 'Soporte', icon: HelpCircle },
+    ],
+    defaultOpen: false,
+  },
+  {
+    id: 'config',
+    label: 'Configuración',
+    icon: Settings,
+    items: [
+      { href: '/api-docs', label: 'API Docs', icon: Code },
+      { href: '/settings', label: 'Configuración', icon: Settings },
+    ],
+    defaultOpen: false,
+  },
 ];
 
 export default function Sidebar() {
@@ -42,6 +134,52 @@ export default function Sidebar() {
   const { data: session } = useSession();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
+  const [openGroups, setOpenGroups] = useState<Set<string>>(
+    new Set(navGroups.filter(g => g.defaultOpen).map(g => g.id))
+  );
+
+  const toggleGroup = (groupId: string) => {
+    setOpenGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(groupId)) {
+        next.delete(groupId);
+      } else {
+        next.add(groupId);
+      }
+      return next;
+    });
+  };
+
+  // Auto-expand group if current path matches any item in it
+  const isGroupActive = (group: NavGroup) => {
+    return group.items.some(item => {
+      if (item.href === '/') {
+        return pathname === '/';
+      }
+      return pathname.startsWith(item.href);
+    });
+  };
+
+  // Auto-expand active groups when pathname changes
+  useEffect(() => {
+    if (isCollapsed) return;
+    
+    setOpenGroups(prev => {
+      const next = new Set(prev);
+      navGroups.forEach(group => {
+        const isActive = group.items.some(item => {
+          if (item.href === '/') {
+            return pathname === '/';
+          }
+          return pathname.startsWith(item.href);
+        });
+        if (isActive && !next.has(group.id)) {
+          next.add(group.id);
+        }
+      });
+      return next;
+    });
+  }, [pathname, isCollapsed]);
 
   return (
     <motion.aside 
@@ -96,61 +234,105 @@ export default function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-6 space-y-2 overflow-y-auto">
-        {navItems.map((item) => {
-          const isActive = pathname === item.href;
-          const Icon = item.icon;
+      <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
+        {navGroups.map((group) => {
+          const GroupIcon = group.icon;
+          const isGroupOpen = openGroups.has(group.id);
+          const isActiveGroup = isGroupActive(group);
 
           return (
-            <div key={item.href} className="relative group">
-              <Link
-                href={item.href}
-                onMouseEnter={() => setHoveredItem(item.label)}
-                onMouseLeave={() => setHoveredItem(null)}
-                className={cn(
-                  "flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all duration-300 relative overflow-hidden",
-                  isActive 
-                    ? "text-primary-foreground shadow-md shadow-primary/20" 
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50",
-                  isCollapsed ? "justify-center" : ""
-                )}
-              >
-                 {isActive && (
-                  <motion.div
-                    layoutId="active-nav-bg"
-                    className="absolute inset-0 bg-gradient-to-r from-primary to-violet-600 z-0"
-                    initial={{ borderRadius: 12 }}
-                  />
-                )}
-                
-                <Icon size={22} className={cn("relative z-10 shrink-0 transition-transform duration-300 group-hover:scale-110", isActive && "animate-pulse-subtle")} />
-                
-                <AnimatePresence>
-                  {!isCollapsed && (
-                    <motion.span
-                      initial={{ opacity: 0, width: 0 }}
-                      animate={{ opacity: 1, width: "auto" }}
-                      exit={{ opacity: 0, width: 0 }}
-                      className="relative z-10 overflow-hidden whitespace-nowrap ml-1"
-                    >
-                      {item.label}
-                    </motion.span>
+            <div key={group.id} className="space-y-1">
+              {/* Group Header */}
+              {!isCollapsed && (
+                <button
+                  onClick={() => toggleGroup(group.id)}
+                  className={cn(
+                    "w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-muted/30",
+                    isActiveGroup && "text-foreground"
                   )}
-                </AnimatePresence>
-              </Link>
+                >
+                  <div className="flex items-center gap-2">
+                    <GroupIcon size={14} />
+                    <span>{group.label}</span>
+                  </div>
+                  {isGroupOpen ? (
+                    <ChevronUp size={14} />
+                  ) : (
+                    <ChevronDown size={14} />
+                  )}
+                </button>
+              )}
 
-              {/* Tooltip for collapsed state */}
+              {/* Group Items */}
               <AnimatePresence>
-                {isCollapsed && hoveredItem === item.label && (
+                {((isCollapsed && isActiveGroup) || isGroupOpen || isCollapsed) && (
                   <motion.div
-                    initial={{ opacity: 0, x: 10, scale: 0.95 }}
-                    animate={{ opacity: 1, x: 20, scale: 1 }}
-                    exit={{ opacity: 0, x: 10, scale: 0.95 }}
-                    className="absolute left-full top-1/2 -translate-y-1/2 z-50 px-3 py-1.5 bg-popover text-popover-foreground text-xs font-semibold rounded-md shadow-xl border border-border whitespace-nowrap"
+                    initial={isCollapsed ? false : { height: 0, opacity: 0 }}
+                    animate={isCollapsed ? {} : { height: 'auto', opacity: 1 }}
+                    exit={isCollapsed ? false : { height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className={cn("space-y-1", isCollapsed && "space-y-1")}
                   >
-                    {item.label}
-                    {/* Arrow */}
-                    <div className="absolute left-0 top-1/2 -translate-x-1 -translate-y-1/2 w-2 h-2 bg-popover rotate-45 border-l border-b border-border" />
+                    {group.items.map((item) => {
+                      const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
+                      const Icon = item.icon;
+
+                      return (
+                        <div key={item.href} className="relative group">
+                          <Link
+                            href={item.href}
+                            onMouseEnter={() => setHoveredItem(item.label)}
+                            onMouseLeave={() => setHoveredItem(null)}
+                            className={cn(
+                              "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-300 relative overflow-hidden",
+                              isActive 
+                                ? "text-primary-foreground shadow-md shadow-primary/20" 
+                                : "text-muted-foreground hover:text-foreground hover:bg-muted/50",
+                              isCollapsed ? "justify-center" : ""
+                            )}
+                          >
+                            {isActive && (
+                              <motion.div
+                                layoutId="active-nav-bg"
+                                className="absolute inset-0 bg-gradient-to-r from-primary to-violet-600 z-0"
+                                initial={{ borderRadius: 12 }}
+                              />
+                            )}
+                            
+                            <Icon size={20} className={cn("relative z-10 shrink-0 transition-transform duration-300 group-hover:scale-110", isActive && "animate-pulse-subtle")} />
+                            
+                            <AnimatePresence>
+                              {!isCollapsed && (
+                                <motion.span
+                                  initial={{ opacity: 0, width: 0 }}
+                                  animate={{ opacity: 1, width: "auto" }}
+                                  exit={{ opacity: 0, width: 0 }}
+                                  className="relative z-10 overflow-hidden whitespace-nowrap ml-1"
+                                >
+                                  {item.label}
+                                </motion.span>
+                              )}
+                            </AnimatePresence>
+                          </Link>
+
+                          {/* Tooltip for collapsed state */}
+                          <AnimatePresence>
+                            {isCollapsed && hoveredItem === item.label && (
+                              <motion.div
+                                initial={{ opacity: 0, x: 10, scale: 0.95 }}
+                                animate={{ opacity: 1, x: 20, scale: 1 }}
+                                exit={{ opacity: 0, x: 10, scale: 0.95 }}
+                                className="absolute left-full top-1/2 -translate-y-1/2 z-50 px-3 py-1.5 bg-popover text-popover-foreground text-xs font-semibold rounded-md shadow-xl border border-border whitespace-nowrap"
+                              >
+                                {item.label}
+                                {/* Arrow */}
+                                <div className="absolute left-0 top-1/2 -translate-x-1 -translate-y-1/2 w-2 h-2 bg-popover rotate-45 border-l border-b border-border" />
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      );
+                    })}
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -181,7 +363,7 @@ export default function Sidebar() {
              <Button
                variant="ghost"
                size="icon"
-               onClick={() => signOut()}
+               onClick={() => signOut({ callbackUrl: '/auth', redirect: true })}
                className="h-8 w-8 text-muted-foreground hover:text-destructive"
                title="Cerrar sesión"
              >
@@ -194,7 +376,7 @@ export default function Sidebar() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => signOut()}
+              onClick={() => signOut({ callbackUrl: '/auth', redirect: true })}
               className="h-8 w-8 mx-auto text-muted-foreground hover:text-destructive"
               title="Cerrar sesión"
             >
