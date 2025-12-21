@@ -5,6 +5,8 @@ import Invoice from '@/lib/models/Invoice';
 import Settings from '@/lib/models/Settings';
 import { notificationService } from '@/lib/notifications';
 import { toCompanyObjectId } from '@/lib/mongodb-helpers';
+import { logger } from '@/lib/logger';
+import { realtimeService } from '@/lib/services/realtime-service';
 
 async function getStripeClient(companyId?: string) {
   await dbConnect();
@@ -31,7 +33,7 @@ const constructStripeEvent = (stripe: Stripe, body: string, signature: string): 
     );
   } catch (err: any) {
     if (!process.env.STRIPE_WEBHOOK_SECRET) {
-      console.warn('⚠️ STRIPE_WEBHOOK_SECRET missing, parsing JSON manually for dev/test.');
+      logger.warn('STRIPE_WEBHOOK_SECRET missing, parsing JSON manually for dev/test');
       return JSON.parse(body);
     }
     throw new Error(`Webhook signature verification failed: ${err.message}`);
@@ -49,10 +51,23 @@ const handleCheckoutSessionCompleted = async (session: Stripe.Checkout.Session) 
     ).populate('client');
 
     if (invoice) {
-        console.log(`Invoice ${invoice.invoiceNumber} marked as PAID via Stripe`);
+        logger.info('Invoice marked as PAID via Stripe', {
+          invoiceNumber: invoice.invoiceNumber,
+          invoiceId: invoice._id,
+        });
         if (invoice.client) {
             await notificationService.sendPaymentConfirmation(invoice, invoice.client);
         }
+        
+        // Emit real-time event
+        if (invoice.companyId) {
+          await realtimeService.emitInvoicePaid(
+            invoice.companyId.toString(),
+            invoice._id.toString(),
+            invoice.invoiceNumber
+          );
+        }
+        
         // Return companyId for use in getStripeClient if needed
         return invoice.companyId?.toString();
     }
@@ -87,7 +102,10 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ received: true });
   } catch (error: any) {
-    console.error('Webhook processing failed:', error.message);
+    logger.error('Webhook processing failed', {
+      error: error.message,
+      stack: error.stack,
+    });
     return NextResponse.json(
       { error: error.message || 'Webhook handler failed' },
       { status: 400 } // Use 400 for bad requests (like signature failure)

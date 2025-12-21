@@ -6,6 +6,7 @@ import AuthProvider from './AuthProvider';
 import { usePathname } from 'next/navigation';
 import ErrorBoundary from './ErrorBoundary';
 import { Toaster } from "@/components/ui/sonner";
+import { RealtimeNotifications } from './RealtimeNotifications';
 
 export default function MainLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const pathname = usePathname();
@@ -28,6 +29,7 @@ export default function MainLayout({ children }: Readonly<{ children: React.Reac
           </div>
         </div>
         <Toaster />
+        <RealtimeNotifications />
       </ErrorBoundary>
     </AuthProvider>
   );
