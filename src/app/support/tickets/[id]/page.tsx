@@ -40,7 +40,27 @@ export default function TicketDetailPage() {
   const [message, setMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
 
-  const { data, error, isLoading, mutate } = useSWR(
+  interface TicketResponse {
+    data: {
+      _id: string;
+      ticketNumber: string;
+      subject: string;
+      description: string;
+      status: string;
+      priority: string;
+      category: string;
+      createdAt: string;
+      messages?: Array<{
+        userId?: { name?: string; email?: string };
+        message: string;
+        createdAt: string;
+      }>;
+      resolutionNotes?: string;
+      resolvedAt?: string;
+    };
+  }
+
+  const { data, error, isLoading, mutate } = useSWR<TicketResponse>(
     ticketId ? `/api/support/tickets/${ticketId}` : null,
     fetcher
   );
