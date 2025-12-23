@@ -12,6 +12,7 @@ import Product from './models/Product';
 import Payment from './models/Payment';
 import RecurringInvoice from './models/RecurringInvoice';
 import User from './models/User';
+import Expense from './models/Expense';
 import { logger } from './logger';
 
 /**
@@ -41,7 +42,28 @@ export async function createIndexes() {
     await Invoice.collection.createIndex({
       status: 1,
       dueDate: 1
-    }); // Compound index for filtering overdue invoices
+    }); // Compound index for filtering overdue invoices (legacy, kept for backward compatibility)
+    
+    // Performance index for overdue invoices with companyId (multi-tenant optimized)
+    await Invoice.collection.createIndex(
+      { companyId: 1, status: 1, dueDate: 1 },
+      { name: 'companyId_status_dueDate' }
+    );
+    
+    // Text index for full-text search in invoices
+    // Note: MongoDB allows only one text index per collection
+    // This index enables $text queries for searching invoiceNumber and notes
+    try {
+      await Invoice.collection.createIndex(
+        { invoiceNumber: 'text', notes: 'text' },
+        { name: 'invoice_text_search', default_language: 'spanish' }
+      );
+    } catch (error: any) {
+      // Text index might already exist, log and continue
+      if (!error.message?.includes('already exists')) {
+        logger.warn('Failed to create text index for invoices', { error: error.message });
+      }
+    }
 
     // VeriFactu indexes
     await Invoice.collection.createIndex({ verifactuStatus: 1 });
@@ -74,6 +96,29 @@ export async function createIndexes() {
     await User.collection.createIndex({ email: 1 }, { unique: true });
     await User.collection.createIndex({ role: 1 });
 
+    // Expense indexes
+    // Performance index for expense reports with sorting by amount
+    await Expense.collection.createIndex(
+      { companyId: 1, date: -1, amount: -1 },
+      { name: 'companyId_date_amount' }
+    );
+
+    // Analytics Materialized Views indexes
+    const AnalyticsMaterializedView = (await import('./models/AnalyticsMaterializedView')).default;
+    await AnalyticsMaterializedView.collection.createIndex(
+      { companyId: 1, viewType: 1, period: 1, periodKey: 1 },
+      { unique: true, name: 'companyId_viewType_period_periodKey_unique' }
+    );
+    await AnalyticsMaterializedView.collection.createIndex(
+      { companyId: 1, viewType: 1, lastUpdated: -1 },
+      { name: 'companyId_viewType_lastUpdated' }
+    );
+    // TTL index for automatic cleanup of old views
+    await AnalyticsMaterializedView.collection.createIndex(
+      { expiresAt: 1 },
+      { expireAfterSeconds: 0, name: 'expiresAt_ttl' }
+    );
+
     logger.info('All database indexes created successfully');
   } catch (error) {
     logger.error('Error creating indexes', error);
@@ -95,6 +140,7 @@ export async function dropIndexes() {
     await Payment.collection.dropIndexes();
     await RecurringInvoice.collection.dropIndexes();
     await User.collection.dropIndexes();
+    await Expense.collection.dropIndexes();
 
     logger.info('All indexes dropped');
   } catch (error) {

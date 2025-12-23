@@ -1,19 +1,26 @@
 /**
- * Simple in-memory rate limiter
- * For production, consider using Redis or a dedicated service
+ * Distributed rate limiter using Redis (Upstash)
+ * Falls back to in-memory rate limiting if Redis is not available
  */
+
+import { Redis } from '@upstash/redis';
+import { logger } from './logger';
 
 interface RateLimitEntry {
   count: number;
   resetTime: number;
 }
 
-class RateLimiter {
+class DistributedRateLimiter {
+  private redis: Redis | null = null;
+  private isRedisAvailable = false;
+  // Fallback in-memory storage
   private requests: Map<string, RateLimitEntry> = new Map();
   private cleanupInterval: NodeJS.Timeout | null = null;
 
   constructor() {
-    // Clean up old entries every minute
+    this.initializeRedis();
+    // Clean up old entries every minute (for in-memory fallback)
     this.cleanupInterval = setInterval(() => {
       const now = Date.now();
       for (const [key, entry] of this.requests.entries()) {
@@ -24,17 +31,100 @@ class RateLimiter {
     }, 60000);
   }
 
+  private initializeRedis(): void {
+    try {
+      const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
+      const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+      if (redisUrl && redisToken) {
+        this.redis = new Redis({
+          url: redisUrl,
+          token: redisToken,
+        });
+        this.isRedisAvailable = true;
+        logger.info('Distributed rate limiter initialized with Redis');
+      } else {
+        logger.warn('Redis credentials not found for rate limiting, using in-memory fallback');
+        this.isRedisAvailable = false;
+      }
+    } catch (error) {
+      logger.error('Failed to initialize Redis for rate limiting, using in-memory fallback', error);
+      this.isRedisAvailable = false;
+    }
+  }
+
   /**
    * Check if a request should be rate limited
+   * Uses Redis for distributed rate limiting, falls back to in-memory
    * @param identifier - Unique identifier (IP, user ID, etc.)
    * @param limit - Maximum number of requests allowed
    * @param windowMs - Time window in milliseconds
    * @returns Object with allowed status and retry info
    */
-  check(
+  async check(
     identifier: string,
     limit: number = 100,
     windowMs: number = 60000
+  ): Promise<{ allowed: boolean; remaining: number; resetTime: number }> {
+    // Use Redis if available (distributed rate limiting)
+    if (this.isRedisAvailable && this.redis) {
+      return this.checkWithRedis(identifier, limit, windowMs);
+    }
+
+    // Fallback to in-memory rate limiting
+    return this.checkInMemory(identifier, limit, windowMs);
+  }
+
+  /**
+   * Redis-based rate limiting (distributed)
+   */
+  private async checkWithRedis(
+    identifier: string,
+    limit: number,
+    windowMs: number
+  ): Promise<{ allowed: boolean; remaining: number; resetTime: number }> {
+    if (!this.redis) {
+      // Fallback if Redis is null
+      return this.checkInMemory(identifier, limit, windowMs);
+    }
+
+    try {
+      const key = `ratelimit:${identifier}`;
+      const windowSeconds = Math.ceil(windowMs / 1000);
+      const now = Date.now();
+      const resetTime = now + windowMs;
+
+      // Use Redis INCR with expiration
+      // If key doesn't exist, it will be created with value 1 and expiration
+      const current = await this.redis.incr(key);
+
+      // Set expiration on first request (when count is 1)
+      if (current === 1) {
+        await this.redis.expire(key, windowSeconds);
+      }
+
+      const allowed = current <= limit;
+      const remaining = Math.max(0, limit - current);
+
+      return {
+        allowed,
+        remaining,
+        resetTime,
+      };
+    } catch (error) {
+      logger.error('Redis rate limit check failed, falling back to in-memory', error);
+      // Fallback to in-memory on Redis error
+      return this.checkInMemory(identifier, limit, windowMs);
+    }
+  }
+
+  /**
+   * In-memory rate limiting (fallback)
+   */
+  private checkInMemory(
+    identifier: string,
+    limit: number,
+    windowMs: number
   ): { allowed: boolean; remaining: number; resetTime: number } {
     const now = Date.now();
     const entry = this.requests.get(identifier);
@@ -60,7 +150,15 @@ class RateLimiter {
   /**
    * Reset rate limit for a specific identifier
    */
-  reset(identifier: string): void {
+  async reset(identifier: string): Promise<void> {
+    if (this.isRedisAvailable && this.redis) {
+      try {
+        const key = `ratelimit:${identifier}`;
+        await this.redis.del(key);
+      } catch (error) {
+        logger.error('Failed to reset rate limit in Redis', error);
+      }
+    }
     this.requests.delete(identifier);
   }
 
@@ -77,7 +175,7 @@ class RateLimiter {
 }
 
 // Singleton instance
-const rateLimiter = new RateLimiter();
+const rateLimiter = new DistributedRateLimiter();
 
 export default rateLimiter;
 

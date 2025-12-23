@@ -218,6 +218,7 @@ export const cacheKeys = {
   invoice: (companyId: string, invoiceId: string) => `invoice:${companyId}:${invoiceId}`,
   invoices: (companyId: string, filters?: string) => `invoices:${companyId}:${filters || 'all'}`,
   settings: (companyId: string) => `settings:${companyId}`,
+  analytics: (companyId: string, dateRange?: string) => `analytics:${companyId}:${dateRange || 'all'}`,
 };
 
 /**
@@ -228,5 +229,28 @@ export const cacheTags = {
   products: (companyId: string) => `products:${companyId}`,
   invoices: (companyId: string) => `invoices:${companyId}`,
   settings: (companyId: string) => `settings:${companyId}`,
+  analytics: (companyId: string) => `analytics:${companyId}`,
 };
+
+/**
+ * Cache TTL configuration by data type
+ * Values in seconds
+ */
+export const CACHE_TTL = {
+  clients: 3600,      // 1 hora - datos relativamente estables
+  products: 3600,    // 1 hora - datos relativamente estables
+  invoices: 1800,    // 30 minutos - cambian más frecuentemente
+  analytics: 1800,   // 30 minutos - cálculos complejos, pero pueden cambiar
+  reports: 3600,     // 1 hora - reportes agregados
+  settings: 7200,    // 2 horas - configuración que cambia raramente
+} as const;
+
+/**
+ * Get cache TTL for a specific data type
+ * @param type - Type of cached data
+ * @returns TTL in seconds (default: 3600 if type not found)
+ */
+export function getCacheTTL(type: keyof typeof CACHE_TTL): number {
+  return CACHE_TTL[type] || 3600; // Default 1 hour
+}
 
