@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Product } from '@/types';
+import { useFormAutoSave } from '@/hooks/useFormAutoSave';
 
 type ProductFormData = z.infer<typeof productSchema>;
 
@@ -19,10 +20,12 @@ interface ProductFormProps {
   readonly isLoading?: boolean;
 }
 
-export function ProductForm({ initialData, onSubmit, isLoading }: ProductFormProps) {
+function ProductFormComponent({ initialData, onSubmit, isLoading }: ProductFormProps) {
   const {
     register,
     handleSubmit,
+    reset,
+    watch,
     formState: { errors }
   } = useForm<ProductFormData>({
     resolver: zodResolver(productSchema) as any,
@@ -36,8 +39,51 @@ export function ProductForm({ initialData, onSubmit, isLoading }: ProductFormPro
     } as any
   });
 
+  // Auto-save to localStorage for new products (drafts)
+  const { loadFromLocalStorage, clearSavedData } = useFormAutoSave(watch, {
+    formKey: `product-draft-${initialData?._id || 'new'}`,
+    enabled: !initialData?._id, // Only auto-save drafts, not when editing existing products
+    debounceMs: 1000,
+  });
+
+  // Load from localStorage or reset form when initialData changes
+  useEffect(() => {
+    if (initialData?._id) {
+      // Editing existing product - reset with initialData
+      reset({
+        name: initialData?.name || '',
+        description: initialData?.description || '',
+        price: initialData?.price || 0,
+        tax: initialData?.tax ?? 21,
+        stock: initialData?.stock ?? 0,
+        alertThreshold: initialData?.alertThreshold ?? 5,
+      } as any);
+    } else {
+      // New product - try to load from localStorage
+      const saved = loadFromLocalStorage();
+      if (saved) {
+        reset(saved as any);
+      } else {
+        reset({
+          name: '',
+          description: '',
+          price: 0,
+          tax: 21,
+          stock: 0,
+          alertThreshold: 5,
+        } as any);
+      }
+    }
+  }, [initialData, reset, loadFromLocalStorage]);
+
+  // Clear saved data on successful submit
+  const handleFormSubmit = async (data: ProductFormData) => {
+    await onSubmit(data);
+    clearSavedData();
+  };
+
   return (
-    <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-4">
+    <form onSubmit={handleSubmit(handleFormSubmit as any)} className="space-y-4">
       <div className="space-y-2">
         <Label htmlFor="name">Nombre</Label>
         <Input id="name" {...register('name')} />
@@ -82,3 +128,27 @@ export function ProductForm({ initialData, onSubmit, isLoading }: ProductFormPro
     </form>
   );
 }
+
+// Memoize ProductForm to prevent unnecessary re-renders
+// Note: We use a key-based approach - when initialData changes (new vs edit), 
+// the parent should provide a key to force remount, so we don't need strict comparison
+export const ProductForm = React.memo(ProductFormComponent, (prevProps, nextProps) => {
+  // Compare isLoading (primitive)
+  if (prevProps.isLoading !== nextProps.isLoading) return false;
+  
+  // Compare initialData by ID - if IDs differ, we need to re-render
+  const prevId = prevProps.initialData?._id;
+  const nextId = nextProps.initialData?._id;
+  
+  if (prevId !== nextId) return false;
+  
+  // If both are undefined (new product), allow re-render to reset form
+  // This ensures form resets when opening dialog for new product
+  if (!prevId && !nextId) {
+    // Compare by reference - if reference changes, it's a new form instance
+    return prevProps.initialData === nextProps.initialData;
+  }
+  
+  // If IDs match, they're the same product - no need to re-render
+  return true;
+});

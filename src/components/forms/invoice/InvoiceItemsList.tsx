@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,7 +21,7 @@ interface InvoiceItemsListProps {
   onProductChange: (index: number, productId: string) => void;
 }
 
-export function InvoiceItemsList({
+function InvoiceItemsListComponent({
   fields,
   append,
   remove,
@@ -101,4 +102,30 @@ export function InvoiceItemsList({
     </Card>
   );
 }
+
+// Memoize component to prevent unnecessary re-renders
+// Only re-render if props actually change
+export const InvoiceItemsList = React.memo(InvoiceItemsListComponent, (prevProps, nextProps) => {
+  // Compare arrays by reference and length
+  if (prevProps.fields.length !== nextProps.fields.length) return false;
+  if (prevProps.products.length !== nextProps.products.length) return false;
+  if (prevProps.watchedItems.length !== nextProps.watchedItems.length) return false;
+  
+  // Compare watchedItems values (they change when user edits)
+  const watchedItemsChanged = prevProps.watchedItems.some((item, index) => {
+    const nextItem = nextProps.watchedItems[index];
+    return !nextItem || 
+           item.product !== nextItem.product ||
+           item.quantity !== nextItem.quantity ||
+           item.price !== nextItem.price ||
+           item.tax !== nextItem.tax;
+  });
+  
+  if (watchedItemsChanged) return false;
+  
+  // Compare products array (reference check is usually enough)
+  if (prevProps.products !== nextProps.products) return false;
+  
+  return true;
+});
 

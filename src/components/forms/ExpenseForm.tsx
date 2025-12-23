@@ -22,6 +22,7 @@ import { fetcher } from '@/lib/fetcher';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
 import Image from 'next/image';
+import { useFormAutoSave } from '@/hooks/useFormAutoSave';
 
 const expenseFormSchema = z.object({
   receiptIds: z.array(z.string()).optional(),
@@ -56,7 +57,7 @@ const categoryLabels: Record<string, string> = {
   other: 'Otros',
 };
 
-export function ExpenseForm({ initialData, isEditing = false, onSuccess }: ExpenseFormProps) {
+function ExpenseFormComponent({ initialData, isEditing = false, onSuccess }: ExpenseFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedReceiptIds, setSelectedReceiptIds] = useState<string[]>(
     initialData?.receiptIds || []
@@ -70,6 +71,7 @@ export function ExpenseForm({ initialData, isEditing = false, onSuccess }: Expen
     handleSubmit,
     setValue,
     watch,
+    reset,
     formState: { errors }
   } = useForm<ExpenseFormData>({
     resolver: zodResolver(expenseFormSchema),
@@ -90,6 +92,31 @@ export function ExpenseForm({ initialData, isEditing = false, onSuccess }: Expen
       notes: initialData?.notes || '',
     }
   });
+
+  // Auto-save to localStorage for new expenses (drafts)
+  const { loadFromLocalStorage, clearSavedData } = useFormAutoSave(watch, {
+    formKey: `expense-draft-${initialData?._id || 'new'}`,
+    enabled: !initialData?._id, // Only auto-save drafts, not when editing existing expenses
+    debounceMs: 1000,
+  });
+
+  // Load from localStorage on mount for new expenses
+  useEffect(() => {
+    if (!initialData?._id) {
+      const saved = loadFromLocalStorage();
+      if (saved) {
+        reset({
+          ...saved,
+          receiptIds: saved.receiptIds || [],
+          tags: saved.tags || '',
+        });
+        // Restore selected receipt IDs
+        if (saved.receiptIds && Array.isArray(saved.receiptIds)) {
+          setSelectedReceiptIds(saved.receiptIds);
+        }
+      }
+    }
+  }, [initialData?._id, loadFromLocalStorage, reset]);
 
   // Pre-fill from selected receipt
   const handleReceiptSelect = (receiptId: string, checked: boolean) => {
@@ -143,6 +170,7 @@ export function ExpenseForm({ initialData, isEditing = false, onSuccess }: Expen
       }
 
       toast.success(isEditing ? 'Gasto actualizado' : 'Gasto creado');
+      clearSavedData(); // Clear saved draft on successful submit
       onSuccess?.();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Ocurrió un error al guardar el gasto');
@@ -185,6 +213,8 @@ export function ExpenseForm({ initialData, isEditing = false, onSuccess }: Expen
                           alt={receipt.originalFilename}
                           fill
                           className="object-cover rounded"
+                          loading="lazy"
+                          sizes="(max-width: 768px) 100vw, 300px"
                         />
                       </div>
                       <p className="text-xs font-medium truncate">
@@ -304,4 +334,22 @@ export function ExpenseForm({ initialData, isEditing = false, onSuccess }: Expen
     </form>
   );
 }
+
+// Memoize ExpenseForm to prevent unnecessary re-renders
+export const ExpenseForm = React.memo(ExpenseFormComponent, (prevProps, nextProps) => {
+  // Compare isEditing (primitive)
+  if (prevProps.isEditing !== nextProps.isEditing) return false;
+  
+  // Compare initialData by reference
+  if (prevProps.initialData !== nextProps.initialData) {
+    if (!prevProps.initialData || !nextProps.initialData) return false;
+    // Compare key fields
+    if (prevProps.initialData._id !== nextProps.initialData._id) return false;
+  }
+  
+  // Compare onSuccess function by reference (should be stable)
+  if (prevProps.onSuccess !== nextProps.onSuccess) return false;
+  
+  return true;
+});
 

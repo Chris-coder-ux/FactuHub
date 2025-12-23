@@ -339,7 +339,15 @@ export default function Sidebar() {
         <div className={cn("flex items-center gap-3", isCollapsed ? "justify-center" : "")}>
            <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center overflow-hidden border border-border">
               {session?.user?.image ? (
-                <Image src={session.user.image} alt="Avatar" width={36} height={36} className="w-full h-full object-cover rounded-full" />
+                <Image 
+                  src={session.user.image} 
+                  alt="Avatar" 
+                  width={36} 
+                  height={36} 
+                  className="w-full h-full object-cover rounded-full"
+                  loading="lazy"
+                  sizes="36px"
+                />
               ) : (
                 <div className="w-full h-full bg-primary flex items-center justify-center text-white font-semibold">
                   {session?.user?.name?.charAt(0) || 'U'}

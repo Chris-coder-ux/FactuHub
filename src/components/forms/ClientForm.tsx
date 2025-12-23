@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { Client } from '@/types';
+import { useFormAutoSave } from '@/hooks/useFormAutoSave';
 
 type ClientFormData = z.infer<typeof clientSchema>;
 
@@ -19,10 +20,12 @@ interface ClientFormProps {
   readonly isLoading?: boolean;
 }
 
-export function ClientForm({ initialData, onSubmit, isLoading }: ClientFormProps) {
+function ClientFormComponent({ initialData, onSubmit, isLoading }: ClientFormProps) {
   const {
     register,
     handleSubmit,
+    reset,
+    watch,
     formState: { errors }
   } = useForm<ClientFormData>({
     resolver: zodResolver(clientSchema),
@@ -41,8 +44,61 @@ export function ClientForm({ initialData, onSubmit, isLoading }: ClientFormProps
     }
   });
 
+  // Auto-save to localStorage for new clients (drafts)
+  const { loadFromLocalStorage, clearSavedData } = useFormAutoSave(watch, {
+    formKey: `client-draft-${initialData?._id || 'new'}`,
+    enabled: !initialData?._id, // Only auto-save drafts, not when editing existing clients
+    debounceMs: 1000,
+  });
+
+  // Load from localStorage or reset form when initialData changes
+  useEffect(() => {
+    if (initialData?._id) {
+      // Editing existing client - reset with initialData
+      reset({
+        name: initialData?.name || '',
+        email: initialData?.email || '',
+        phone: initialData?.phone || '',
+        taxId: initialData?.taxId || '',
+        address: {
+          street: initialData?.address?.street || '',
+          city: initialData?.address?.city || '',
+          state: initialData?.address?.state || '',
+          zipCode: initialData?.address?.zipCode || '',
+          country: initialData?.address?.country || '',
+        }
+      });
+    } else {
+      // New client - try to load from localStorage
+      const saved = loadFromLocalStorage();
+      if (saved) {
+        reset(saved);
+      } else {
+        reset({
+          name: '',
+          email: '',
+          phone: '',
+          taxId: '',
+          address: {
+            street: '',
+            city: '',
+            state: '',
+            zipCode: '',
+            country: '',
+          }
+        });
+      }
+    }
+  }, [initialData, reset, loadFromLocalStorage]);
+
+  // Clear saved data on successful submit
+  const handleFormSubmit = async (data: ClientFormData) => {
+    await onSubmit(data);
+    clearSavedData();
+  };
+
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+    <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="name">Nombre / Razón Social</Label>
@@ -97,3 +153,27 @@ export function ClientForm({ initialData, onSubmit, isLoading }: ClientFormProps
     </form>
   );
 }
+
+// Memoize ClientForm to prevent unnecessary re-renders
+// Note: We use a key-based approach - when initialData changes (new vs edit), 
+// the parent should provide a key to force remount, so we don't need strict comparison
+export const ClientForm = React.memo(ClientFormComponent, (prevProps, nextProps) => {
+  // Compare isLoading (primitive)
+  if (prevProps.isLoading !== nextProps.isLoading) return false;
+  
+  // Compare initialData by ID - if IDs differ, we need to re-render
+  const prevId = prevProps.initialData?._id;
+  const nextId = nextProps.initialData?._id;
+  
+  if (prevId !== nextId) return false;
+  
+  // If both are undefined (new client), allow re-render to reset form
+  // This ensures form resets when opening dialog for new client
+  if (!prevId && !nextId) {
+    // Compare by reference - if reference changes, it's a new form instance
+    return prevProps.initialData === nextProps.initialData;
+  }
+  
+  // If IDs match, they're the same client - no need to re-render
+  return true;
+});

@@ -7,6 +7,7 @@ import { usePathname } from 'next/navigation';
 import ErrorBoundary from './ErrorBoundary';
 import { Toaster } from "@/components/ui/sonner";
 import { RealtimeNotifications } from './RealtimeNotifications';
+import { ServiceWorkerRegistration } from './ServiceWorkerRegistration';
 
 export default function MainLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const pathname = usePathname();
@@ -19,6 +20,7 @@ export default function MainLayout({ children }: Readonly<{ children: React.Reac
   return (
     <AuthProvider>
       <ErrorBoundary>
+        <ServiceWorkerRegistration />
         <div className="flex min-h-screen bg-background text-foreground transition-colors duration-300">
           <Sidebar />
           <div className="flex-1 flex flex-col min-h-screen relative overflow-x-hidden">
