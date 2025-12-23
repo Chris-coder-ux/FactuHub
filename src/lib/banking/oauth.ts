@@ -1,4 +1,5 @@
-import axios from 'axios';
+import axios, { AxiosInstance } from 'axios';
+import { createPinnedHttpsAgent } from '@/lib/security/certificate-pinning';
 
 interface OAuthConfig {
   clientId: string;
@@ -10,9 +11,19 @@ interface OAuthConfig {
 
 class BankingOAuth {
   private config: OAuthConfig;
+  private axiosInstance: AxiosInstance;
 
   constructor(config: OAuthConfig) {
     this.config = config;
+    
+    // Create axios instance with certificate pinning
+    const hostname = new URL(config.tokenUrl).hostname;
+    const httpsAgent = createPinnedHttpsAgent(hostname);
+    
+    this.axiosInstance = axios.create({
+      httpsAgent,
+      timeout: 30000,
+    });
   }
 
   // Generate authorization URL
@@ -29,7 +40,7 @@ class BankingOAuth {
 
   // Exchange code for tokens
   async getTokens(code: string): Promise<{ accessToken: string; refreshToken?: string; expiresIn: number }> {
-    const response = await axios.post(this.config.tokenUrl, {
+    const response = await this.axiosInstance.post(this.config.tokenUrl, {
       grant_type: 'authorization_code',
       code,
       redirect_uri: this.config.redirectUri,
@@ -50,7 +61,7 @@ class BankingOAuth {
 
   // Refresh access token
   async refreshToken(refreshToken: string): Promise<{ accessToken: string; expiresIn: number }> {
-    const response = await axios.post(this.config.tokenUrl, {
+    const response = await this.axiosInstance.post(this.config.tokenUrl, {
       grant_type: 'refresh_token',
       refresh_token: refreshToken,
       client_id: this.config.clientId,

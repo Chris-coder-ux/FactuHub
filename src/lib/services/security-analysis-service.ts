@@ -3,6 +3,10 @@ import AuditLog from '@/lib/models/AuditLog';
 import SecurityAlert from '@/lib/models/SecurityAlert';
 import { logger } from '@/lib/logger';
 import { toCompanyObjectId } from '@/lib/mongodb-helpers';
+import { emailService } from '@/lib/services/email-service';
+import Settings from '@/lib/models/Settings';
+import Company from '@/lib/models/Company';
+import User from '@/lib/models/User';
 
 export interface SecurityAnalysisResult {
   alertsCreated: number;
@@ -664,6 +668,201 @@ export class SecurityAnalysisService {
       deletionDate: log.createdAt.toISOString(),
       logIds: [log._id],
     }));
+  }
+
+  /**
+   * Envía notificación de seguridad por email
+   */
+  private static async sendSecurityNotification(
+    alert: any,
+    companyId?: string
+  ): Promise<void> {
+    try {
+      if (!companyId) {
+        logger.warn('Cannot send security notification: companyId is required');
+        return;
+      }
+
+      await dbConnect();
+
+      // Get company settings to check if notifications are enabled
+      const settings = await Settings.findOne({
+        companyId: toCompanyObjectId(companyId),
+      }).lean();
+
+      if (!settings) {
+        logger.warn('Cannot send security notification: company settings not found', { companyId });
+        return;
+      }
+
+      // Check if email notifications are enabled
+      if (settings.emailNotificationsEnabled === false) {
+        logger.info('Email notifications disabled for company', { companyId });
+        return;
+      }
+
+      // Get company info
+      const company = await Company.findById(companyId).lean();
+      if (!company) {
+        logger.warn('Cannot send security notification: company not found', { companyId });
+        return;
+      }
+
+      // Get admin users to notify
+      const adminUsers = await User.find({
+        companyId: toCompanyObjectId(companyId),
+        role: { $in: ['admin', 'owner'] },
+      }).lean();
+
+      if (adminUsers.length === 0) {
+        logger.warn('No admin users found to notify', { companyId });
+        return;
+      }
+
+      // Prepare email content
+      const severityLabels: Record<string, string> = {
+        critical: '🔴 CRÍTICA',
+        high: '🟠 ALTA',
+        medium: '🟡 MEDIA',
+        low: '🔵 BAJA',
+      };
+
+      const severityLabel = severityLabels[alert.severity] || alert.severity.toUpperCase();
+
+      const emailSubject = `[${severityLabel}] Alerta de Seguridad: ${alert.title}`;
+
+      const emailHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: ${alert.severity === 'critical' ? '#dc2626' : alert.severity === 'high' ? '#ea580c' : '#ca8a04'}; color: white; padding: 20px; border-radius: 5px 5px 0 0; }
+            .content { background-color: #f9fafb; padding: 20px; border: 1px solid #e5e7eb; }
+            .alert-details { background-color: white; padding: 15px; margin: 15px 0; border-left: 4px solid ${alert.severity === 'critical' ? '#dc2626' : alert.severity === 'high' ? '#ea580c' : '#ca8a04'}; }
+            .footer { text-align: center; padding: 20px; color: #6b7280; font-size: 12px; }
+            .button { display: inline-block; padding: 10px 20px; background-color: #2563eb; color: white; text-decoration: none; border-radius: 5px; margin-top: 15px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h2>🚨 Alerta de Seguridad</h2>
+              <p style="margin: 0;">Severidad: ${severityLabel}</p>
+            </div>
+            <div class="content">
+              <h3>${alert.title}</h3>
+              <p>${alert.description}</p>
+              
+              <div class="alert-details">
+                <strong>Detalles:</strong>
+                <ul>
+                  ${Object.entries(alert.details || {})
+                    .map(([key, value]) => `<li><strong>${key}:</strong> ${typeof value === 'object' ? JSON.stringify(value) : String(value)}</li>`)
+                    .join('')}
+                </ul>
+                ${alert.ipAddress ? `<p><strong>IP Address:</strong> ${alert.ipAddress}</p>` : ''}
+                <p><strong>Fecha:</strong> ${new Date(alert.detectedAt).toLocaleString('es-ES')}</p>
+              </div>
+
+              <a href="${process.env.NEXTAUTH_URL || 'https://app.example.com'}/security" class="button">
+                Ver Alertas de Seguridad
+              </a>
+            </div>
+            <div class="footer">
+              <p>Esta es una notificación automática del sistema de seguridad de ${company.name || 'FacturaHub'}.</p>
+              <p>Si no reconoces esta actividad, por favor contacta al administrador del sistema inmediatamente.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      const emailText = `
+ALERTA DE SEGURIDAD - ${severityLabel}
+
+${alert.title}
+
+${alert.description}
+
+Detalles:
+${Object.entries(alert.details || {})
+  .map(([key, value]) => `  ${key}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`)
+  .join('\n')}
+
+${alert.ipAddress ? `IP Address: ${alert.ipAddress}\n` : ''}
+Fecha: ${new Date(alert.detectedAt).toLocaleString('es-ES')}
+
+Ver alertas: ${process.env.NEXTAUTH_URL || 'https://app.example.com'}/security
+      `.trim();
+
+      // Send email to all admin users
+      const emailPromises = adminUsers.map((user) =>
+        emailService.sendEmail({
+          to: user.email,
+          subject: emailSubject,
+          html: emailHtml,
+          text: emailText,
+          companyId,
+          userId: user._id.toString(),
+          type: 'other',
+          metadata: {
+            alertId: alert._id?.toString() || alert.id,
+            alertType: alert.alertType,
+            severity: alert.severity,
+          },
+        })
+      );
+
+      await Promise.allSettled(emailPromises);
+
+      logger.info('Security notification emails sent', {
+        companyId,
+        alertId: alert._id?.toString() || alert.id,
+        recipients: adminUsers.length,
+      });
+    } catch (error) {
+      logger.error('Failed to send security notification', { error, alertId: alert._id?.toString() || alert.id });
+      // Don't throw - notification failure shouldn't fail alert creation
+    }
+  }
+
+  /**
+   * Crea una alerta de seguridad y envía notificación inmediata si es crítica
+   */
+  static async createAlertAndNotify(params: {
+    companyId?: string;
+    userId?: string;
+    alertType: string;
+    severity: 'low' | 'medium' | 'high' | 'critical';
+    title: string;
+    description: string;
+    details: Record<string, any>;
+    relatedLogIds?: any[];
+    ipAddress?: string;
+    userAgent?: string;
+  }): Promise<string | null> {
+    const alertId = await this.createAlert(params);
+
+    if (alertId && params.severity === 'critical' && params.companyId) {
+      // Get the created alert to send notification
+      try {
+        await dbConnect();
+        const alert = await SecurityAlert.findById(alertId).lean();
+        if (alert) {
+          // Send notification asynchronously (don't wait)
+          this.sendSecurityNotification(alert, params.companyId).catch((error) => {
+            logger.error('Failed to send security notification asynchronously', { error, alertId });
+          });
+        }
+      } catch (error) {
+        logger.error('Failed to fetch alert for notification', { error, alertId });
+      }
+    }
+
+    return alertId;
   }
 
   /**

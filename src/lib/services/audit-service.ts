@@ -63,7 +63,7 @@ export class AuditService {
   }
 
   /**
-   * Obtiene logs de auditoría con filtros
+   * Obtiene logs de auditoría con filtros (offset-based)
    */
   static async getLogs(
     companyId: string,
@@ -132,6 +132,79 @@ export class AuditService {
       return { logs, total };
     } catch (error) {
       logger.error('Error fetching audit logs', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtiene logs de auditoría con cursor-based pagination (más eficiente para grandes datasets)
+   */
+  static async getLogsWithCursor(
+    companyId: string,
+    filters: {
+      userId?: string;
+      action?: IAuditLog['action'];
+      resourceType?: IAuditLog['resourceType'];
+      resourceId?: string;
+      success?: boolean;
+      startDate?: Date;
+      endDate?: Date;
+      cursor?: string;
+      limit: number;
+    }
+  ): Promise<{ logs: IAuditLog[] }> {
+    try {
+      await dbConnect();
+      const mongoose = await import('mongoose');
+
+      const query: any = {
+        companyId: toCompanyObjectId(companyId),
+      };
+
+      if (filters.userId) {
+        query.userId = filters.userId;
+      }
+
+      if (filters.action) {
+        query.action = filters.action;
+      }
+
+      if (filters.resourceType) {
+        query.resourceType = filters.resourceType;
+      }
+
+      if (filters.resourceId) {
+        query.resourceId = filters.resourceId;
+      }
+
+      if (filters.success !== undefined) {
+        query.success = filters.success;
+      }
+
+      if (filters.startDate || filters.endDate) {
+        query.createdAt = {};
+        if (filters.startDate) {
+          query.createdAt.$gte = filters.startDate;
+        }
+        if (filters.endDate) {
+          query.createdAt.$lte = filters.endDate;
+        }
+      }
+
+      // Add cursor filter if provided
+      if (filters.cursor && mongoose.Types.ObjectId.isValid(filters.cursor)) {
+        query._id = { $lt: new mongoose.Types.ObjectId(filters.cursor) };
+      }
+
+      const logs = await AuditLog.find(query)
+        .populate('userId', 'name email')
+        .sort({ createdAt: -1, _id: -1 }) // Ensure _id is in sort for cursor consistency
+        .limit(filters.limit)
+        .lean();
+
+      return { logs };
+    } catch (error) {
+      logger.error('Error fetching audit logs with cursor', error);
       throw error;
     }
   }

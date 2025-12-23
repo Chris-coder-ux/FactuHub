@@ -1,5 +1,7 @@
-import axios from 'axios';
+import axios, { AxiosInstance } from 'axios';
 import BankAccount from '../models/BankAccount';
+import { createPinnedHttpsAgent } from '@/lib/security/certificate-pinning';
+import https from 'https';
 
 interface BBVAConfig {
   clientId: string;
@@ -9,14 +11,24 @@ interface BBVAConfig {
 
 class BBVABankingAPI {
   private config: BBVAConfig;
+  private axiosInstance: AxiosInstance;
 
   constructor(config: BBVAConfig) {
     this.config = config;
+    
+    // Create axios instance with certificate pinning
+    const hostname = new URL(config.baseUrl).hostname;
+    const httpsAgent = createPinnedHttpsAgent(hostname);
+    
+    this.axiosInstance = axios.create({
+      httpsAgent,
+      timeout: 30000,
+    });
   }
 
   // Get list of accounts
   async getAccounts(accessToken: string) {
-    const response = await axios.get(`${this.config.baseUrl}/accounts`, {
+    const response = await this.axiosInstance.get(`${this.config.baseUrl}/accounts`, {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'X-Request-ID': this.generateRequestId(),
@@ -27,7 +39,7 @@ class BBVABankingAPI {
 
   // Get account balance and details
   async getAccountInfo(accessToken: string, accountId: string) {
-    const response = await axios.get(`${this.config.baseUrl}/accounts/${accountId}`, {
+    const response = await this.axiosInstance.get(`${this.config.baseUrl}/accounts/${accountId}`, {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'X-Request-ID': this.generateRequestId(),
@@ -42,7 +54,7 @@ class BBVABankingAPI {
     if (dateFrom) params.append('dateFrom', dateFrom);
     if (dateTo) params.append('dateTo', dateTo);
 
-    const response = await axios.get(`${this.config.baseUrl}/accounts/${accountId}/transactions?${params.toString()}`, {
+    const response = await this.axiosInstance.get(`${this.config.baseUrl}/accounts/${accountId}/transactions?${params.toString()}`, {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'X-Request-ID': this.generateRequestId(),

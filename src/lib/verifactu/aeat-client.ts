@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import * as crypto from 'crypto';
 import { VeriFactuConfig } from './types';
 import { logger } from '@/lib/logger';
+import { createPinnedHttpsAgent } from '@/lib/security/certificate-pinning';
 
 // Re-export types for backward compatibility
 export interface AeatResponse {
@@ -40,7 +41,7 @@ export class VeriFactuAeatClient {
     const cert = readFileSync(this.config.certificate.path);
     const key = cert; // For P12 certificates, key is same as cert
 
-    return new https.Agent({
+    const baseAgent = new https.Agent({
       cert,
       key,
       passphrase: this.config.certificate.password,
@@ -49,6 +50,13 @@ export class VeriFactuAeatClient {
       secureProtocol: 'TLSv1_2_method',
       ciphers: 'HIGH:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!SRP:!CAMELLIA',
     });
+
+    // Add certificate pinning for AEAT
+    const hostname = this.config.environment === 'production'
+      ? 'www.agenciatributaria.es'
+      : 'prewww.agenciatributaria.es';
+
+    return createPinnedHttpsAgent(hostname, baseAgent);
   }
 
   private getEndpoint(): string {
