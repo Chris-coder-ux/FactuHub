@@ -128,22 +128,15 @@ export async function GET(request: NextRequest) {
     
     return NextResponse.json(response);
   } catch (error: any) {
-    logger.error('Get invoices error', error);
+    // Use universal error handler
+    const { handleApiError } = await import('@/lib/api-error-handler');
+    const errorResponse = handleApiError(error);
     
     // Track error
     const duration = Date.now() - startTime;
-    MetricsService.trackApiPerformance('/api/invoices', duration, 500, 'GET');
+    MetricsService.trackApiPerformance('/api/invoices', duration, errorResponse.status, 'GET');
     
-    // Handle permission errors
-    const { isPermissionError, handlePermissionError } = await import('@/lib/api-error-handler');
-    if (isPermissionError(error)) {
-      return handlePermissionError(error);
-    }
-    
-    return NextResponse.json({ 
-      message: 'Internal server error',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    }, { status: 500 });
+    return errorResponse;
   }
 }
 
@@ -275,15 +268,15 @@ export async function POST(request: NextRequest) {
     
     return NextResponse.json(invoice, { status: 201 });
   } catch (error: any) {
-    logger.error('Create invoice error', error);
+    // Use universal error handler
+    const { handleApiError } = await import('@/lib/api-error-handler');
+    const errorResponse = handleApiError(error);
     
     // Track error
     const duration = Date.now() - startTime;
-    const statusCode = error.message?.includes('Insufficient permissions') ? 403 :
-                      error instanceof z.ZodError ? 400 : 500;
-    MetricsService.trackApiPerformance('/api/invoices', duration, statusCode, 'POST');
+    MetricsService.trackApiPerformance('/api/invoices', duration, errorResponse.status, 'POST');
     
-    // Log failed audit event
+    // Log failed audit event (only if we have session)
     try {
       const { session, companyId } = await requireCompanyContext();
       await auditMiddleware(request, {
@@ -291,30 +284,11 @@ export async function POST(request: NextRequest) {
         companyId,
         action: 'create',
         resourceType: 'invoice',
-      }, { success: false, errorMessage: error.message });
+      }, { success: false, errorMessage: error instanceof Error ? error.message : String(error) });
     } catch {
-      // Ignore audit errors
+      // Ignore audit errors (user might not be authenticated)
     }
     
-    // Handle permission errors
-    if (error.message?.includes('Insufficient permissions') || 
-        error.message?.includes('Company context required') ||
-        error.message?.includes('No company found') ||
-        error.message?.includes('create a company') ||
-        error.message?.includes('does not belong to your company')) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 403 }
-      );
-    }
-    
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({ 
-        message: 'Validation error', 
-        errors: error.issues 
-      }, { status: 400 });
-    }
-    
-    return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
+    return errorResponse;
   }
 }

@@ -5,6 +5,7 @@ import type { JWT } from 'next-auth/jwt';
 import bcrypt from 'bcryptjs';
 import dbConnect from '@/lib/mongodb';
 import UserModel from '@/lib/models/User';
+import { UnauthorizedError, ForbiddenError } from '@/lib/errors';
 
 export const authOptions = {
   providers: [
@@ -147,7 +148,7 @@ export async function getSession() {
 export async function requireAuth() {
   const session = await getSession();
   if (!session) {
-    throw new Error('Unauthorized');
+    throw new UnauthorizedError('Authentication required. Please log in.');
   }
   return session;
 }
@@ -155,7 +156,7 @@ export async function requireAuth() {
 export async function requireRole(role: 'admin' | 'user') {
   const session = await requireAuth();
   if (session.user.role !== role && session.user.role !== 'admin') {
-    throw new Error('Forbidden: Insufficient permissions');
+    throw new ForbiddenError('Insufficient permissions. This action requires a higher role.');
   }
   return session;
 }
@@ -174,7 +175,7 @@ export async function requireCompanyContext() {
     const user = await UserModel.findById(session.user.id);
     
     if (!user) {
-      throw new Error('User not found');
+      throw new UnauthorizedError('User not found');
     }
     
     if (user.companyId) {
@@ -193,7 +194,7 @@ export async function requireCompanyContext() {
         await user.save();
       } else {
         // Return a more helpful error message
-        throw new Error('No company found. Please create a company first or contact an administrator to be added to one.');
+        throw new ForbiddenError('No company found. Please create a company first or contact an administrator to be added to one.');
       }
     }
   }
