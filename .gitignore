@@ -38,6 +38,9 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 
+# Exception: .env.example should be tracked (it's a template)
+!.env.example
+
 # Vercel
 .vercel
 
