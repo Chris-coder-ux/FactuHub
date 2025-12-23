@@ -65,44 +65,29 @@ Una plataforma completa de facturación web construida con Next.js, TypeScript, 
    npm install
    ```
 
-3. Configura variables de entorno en `.env.local`:
+3. Configura variables de entorno:
+   ```bash
+   # Copia el archivo de ejemplo
+   cp .env.example .env.local
    ```
-   # Base de datos y auth
-   MONGODB_URI=mongodb://localhost:27017/invoicing-app
-   NEXTAUTH_SECRET=tu-secreto-aqui
+
+   Luego edita `.env.local` y completa las variables **requeridas**:
+   - `MONGODB_URI`: Connection string de MongoDB (local o Atlas)
+   - `NEXTAUTH_SECRET`: Genera con: `openssl rand -base64 32`
+   - `NEXTAUTH_URL`: URL de la aplicación (http://localhost:3000 para desarrollo)
+   - `ENCRYPTION_KEY`: Genera con: `openssl rand -hex 32`
+
+   **Variables requeridas mínimas para desarrollo:**
+   ```bash
+   MONGODB_URI=mongodb://localhost:27017/facturahub
+   NEXTAUTH_SECRET=tu-secreto-generado-aqui
    NEXTAUTH_URL=http://localhost:3000
-
-   # Redis (para cola VeriFactu - opcional en desarrollo)
-   # Opción 1: Instalar Redis localmente o usar Docker
-   REDIS_URL=redis://localhost:6379
-   # Opción 2: Usar Upstash (cloud) incluso en desarrollo
-   # REDIS_URL=rediss://default:password@xxx.upstash.io:6379
-   # Si no configuras Redis, la cola usará modo in-memory (fallback)
-
-   # Pagos
-   STRIPE_PUBLISHABLE_KEY=pk_test_...
-   STRIPE_SECRET_KEY=sk_test_...
-   STRIPE_WEBHOOK_SECRET=whsec_...
-
-   # Emails
-   SENDGRID_API_KEY=tu-api-key
-
-     # VeriFactu (opcional - para cumplimiento AEAT España)
-     VERIFACTU_ENABLED=true  # Habilitar VeriFactu
-     VERIFACTU_CERTIFICATE_PATH=/path/to/certificate.p12  # Ruta al certificado FNMT
-     VERIFACTU_CERTIFICATE_PASSWORD=tu-password-certificado
-     VERIFACTU_ENVIRONMENT=sandbox  # 'sandbox' para pruebas, 'production' para real
-     VERIFACTU_AUTO_SEND=true  # Enviar automáticamente al crear facturas españolas
-     VERIFACTU_AUTO_ENABLE_FOR_SPAIN=true  # Habilitar automáticamente para clientes ES
-     VERIFACTU_CHAIN_HASH=hash-inicial-para-chain  # Hash inicial para encadenamiento
-
-     # OCR con Google Cloud Vision (opcional - para procesamiento avanzado de recibos)
-     GOOGLE_CLOUD_PROJECT=tu-project-id-gcp  # ID del proyecto Google Cloud
-     GOOGLE_APPLICATION_CREDENTIALS=./ruta/a/service-account-key.json  # Ruta a credenciales GCP
-     USE_VISION_OCR=false  # true para usar Vision API por defecto, false para Tesseract
+   ENCRYPTION_KEY=tu-clave-de-64-caracteres-hex-aqui
    ```
 
-   **Nota VeriFactu**: Para usar cumplimiento AEAT, obtén certificados digitales de FNMT (https://www.fnmt.es) y configúralos en la interfaz de settings de la app.
+   **Nota**: El archivo `.env.example` contiene todas las variables disponibles con explicaciones. Las variables opcionales (Redis, Stripe, SendGrid, etc.) pueden configurarse más adelante según necesites.
+
+   **Ver documentación completa**: Ver `docs/LOCAL_DEVELOPMENT.md` para instrucciones detalladas de configuración.
 
 4. Ejecuta la aplicación:
    ```bash
