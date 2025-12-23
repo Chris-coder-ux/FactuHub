@@ -31,7 +31,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Local env files
+# Local env files (but NOT .env.example)
 .env*.local
 .env.local
 .env.development.local
@@ -39,6 +39,7 @@ yarn-error.log*
 .env.production.local
 
 # Exception: .env.example should be tracked (it's a template)
+# This must come AFTER the patterns above to override them
 !.env.example
 
 # Vercel
