@@ -11,6 +11,7 @@ import { VeriFactuAeatClient } from '@/lib/verifactu/aeat-client';
 import { VeriFactuCabecera } from '@/lib/verifactu/types';
 import { decryptCertificatePassword, decryptAeatCredentials, isEncrypted } from '@/lib/encryption';
 import { toCompanyObjectId } from '@/lib/mongodb-helpers';
+import { cacheService, cacheTags } from '@/lib/cache';
 
 const cancelInvoiceSchema = z.object({
   reason: z.string().min(1, 'Reason is required').max(500, 'Reason too long'),
@@ -200,6 +201,11 @@ export async function PATCH(
     invoice.cancelledAt = new Date();
     invoice.cancellationReason = validatedData.reason;
     await invoice.save();
+
+    // Invalidate invoices cache after cancellation
+    await cacheService.invalidateByTags([cacheTags.invoices(companyId)]).catch(err => {
+      logger.warn('Failed to invalidate invoices cache', { error: err, companyId });
+    });
 
     logger.info('Invoice cancelled successfully', {
       invoiceId: invoice._id,

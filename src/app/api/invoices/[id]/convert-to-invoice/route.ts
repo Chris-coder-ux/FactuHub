@@ -5,6 +5,7 @@ import { requireCompanyContext } from '@/lib/auth';
 import { requireCompanyPermission } from '@/lib/company-rbac';
 import { toCompanyObjectId } from '@/lib/mongodb-helpers';
 import { logger } from '@/lib/logger';
+import { cacheService, cacheTags } from '@/lib/cache';
 
 /**
  * Convierte una factura proforma en una factura real
@@ -46,6 +47,11 @@ export async function POST(
     invoice.invoiceType = 'invoice';
     invoice.status = invoice.status === 'draft' ? 'draft' : invoice.status;
     await invoice.save();
+
+    // Invalidate invoices cache after conversion
+    await cacheService.invalidateByTags([cacheTags.invoices(companyId)]).catch(err => {
+      logger.warn('Failed to invalidate invoices cache', { error: err, companyId });
+    });
 
     logger.info('Proforma converted to invoice', {
       invoiceId: invoice._id,

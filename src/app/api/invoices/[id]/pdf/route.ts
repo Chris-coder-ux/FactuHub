@@ -106,10 +106,16 @@ export async function GET(
     // Convert to buffer
     const pdfBuffer = Buffer.from(doc.output('arraybuffer'));
     
+    // Check if this is a preview request (no download header)
+    const isPreview = request.headers.get('accept')?.includes('text/html') || 
+                      request.nextUrl.searchParams.get('preview') === 'true';
+    
     return new NextResponse(pdfBuffer, {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="invoice-${invoice.invoiceNumber}.pdf"`,
+        'Content-Disposition': isPreview 
+          ? `inline; filename="invoice-${invoice.invoiceNumber}.pdf"`
+          : `attachment; filename="invoice-${invoice.invoiceNumber}.pdf"`,
       },
     });
     

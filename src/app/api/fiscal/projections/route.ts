@@ -44,6 +44,9 @@ export async function POST(request: NextRequest) {
     // Save projections with companyId
     if (Array.isArray(projections)) {
       for (const projection of projections) {
+        // Remove _id if present to avoid duplicate key errors during upsert
+        const { _id, ...projectionData } = projection as any;
+        
         await FiscalProjection.findOneAndUpdate(
           createCompanyFilter(companyId, {
             userId: session.user.id,
@@ -52,7 +55,7 @@ export async function POST(request: NextRequest) {
             quarter: projection.quarter,
           }),
           {
-            ...projection,
+            ...projectionData,
             companyId: toCompanyObjectId(companyId),
             userId: session.user.id,
           },
