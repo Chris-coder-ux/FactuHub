@@ -15,6 +15,14 @@
     {
       "path": "/api/cron/storage-cleanup",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/refresh-analytics-views",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/key-rotation",
+      "schedule": "0 4 * * *"
     }
   ]
 }

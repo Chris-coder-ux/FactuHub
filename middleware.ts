@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import rateLimiter, { getClientIdentifier, RATE_LIMITS } from './src/lib/rate-limit';
+import { enhanceResponseWithCSP } from './src/middleware-csp';
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   
   // Determine rate limit based on path
   let limit: number = RATE_LIMITS.api.limit;
   let windowMs: number = RATE_LIMITS.api.windowMs;
-  
+
   if (pathname.startsWith('/api/auth')) {
     limit = RATE_LIMITS.auth.limit;
     windowMs = RATE_LIMITS.auth.windowMs;
@@ -30,15 +31,15 @@ export function middleware(request: NextRequest) {
   // Get client identifier
   const identifier = getClientIdentifier(request);
   
-  // Check rate limit
-  const { allowed, remaining, resetTime } = rateLimiter.check(
+  // Check rate limit (async)
+  const { allowed, remaining, resetTime } = await rateLimiter.check(
     `${identifier}:${pathname}`,
     limit,
     windowMs
   );
   
   // Add rate limit headers
-  const response = allowed 
+  let response = allowed 
     ? NextResponse.next()
     : NextResponse.json(
         { 
@@ -48,6 +49,9 @@ export function middleware(request: NextRequest) {
         },
         { status: 429 }
       );
+  
+  // Enhance response with CSP nonce and strict CSP
+  response = enhanceResponseWithCSP(request, response);
   
   response.headers.set('X-RateLimit-Limit', limit.toString());
   response.headers.set('X-RateLimit-Remaining', remaining.toString());

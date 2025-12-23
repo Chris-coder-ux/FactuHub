@@ -50,6 +50,13 @@ const nextConfig = {
         usedExports: true, // Habilitar tree-shaking
         // sideEffects: false removido - CSS tiene side effects y causa errores en build
       };
+      
+      // Límites de bundle size para prevenir degradación de performance
+      config.performance = {
+        hints: 'warning', // Mostrar warnings cuando se excedan los límites
+        maxAssetSize: 512000, // 512KB - tamaño máximo de un asset individual
+        maxEntrypointSize: 512000, // 512KB - tamaño máximo del entrypoint (JS inicial)
+      };
     }
     
     // Suprimir warnings conocidos de Sentry/OpenTelemetry
@@ -66,6 +73,85 @@ const nextConfig = {
   
   // Headers de compresión (si se usa servidor propio)
   compress: true,
+  
+  // Headers de seguridad
+  async headers() {
+    const isProduction = process.env.NODE_ENV === 'production';
+    
+    // Note: CSP with nonces is handled dynamically in middleware.ts
+    // This is a fallback CSP for static assets and initial page load
+    const fallbackCSP = isProduction
+      ? [
+          "default-src 'self'",
+          "script-src 'self' 'unsafe-inline'", // Nonces added dynamically by middleware
+          "style-src 'self' 'unsafe-inline'", // Nonces added dynamically by middleware
+          "img-src 'self' data: https: blob:",
+          "font-src 'self' data:",
+          "connect-src 'self' https://*.sentry.io https://*.cloudinary.com wss://*.sentry.io",
+          "frame-src 'self'",
+          "object-src 'none'",
+          "base-uri 'self'",
+          "form-action 'self'",
+          "frame-ancestors 'none'",
+          "upgrade-insecure-requests",
+        ].join('; ')
+      : [
+          "default-src 'self'",
+          "script-src 'self' 'unsafe-inline' 'unsafe-eval'", // unsafe-eval necesario para Next.js HMR en desarrollo
+          "style-src 'self' 'unsafe-inline'",
+          "img-src 'self' data: https: blob:",
+          "font-src 'self' data:",
+          "connect-src 'self' https://*.sentry.io https://*.cloudinary.com wss://*.sentry.io ws://localhost:*",
+          "frame-src 'self'",
+          "object-src 'none'",
+          "base-uri 'self'",
+          "form-action 'self'",
+          "frame-ancestors 'none'",
+        ].join('; ');
+    
+    return [
+      {
+        // Aplicar a todas las rutas
+        source: '/(.*)',
+        headers: [
+          // Prevenir clickjacking
+          {
+            key: 'X-Frame-Options',
+            value: 'DENY',
+          },
+          // Prevenir MIME type sniffing
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
+          // Control de referrer
+          {
+            key: 'Referrer-Policy',
+            value: 'strict-origin-when-cross-origin',
+          },
+          // Permisos de API del navegador
+          {
+            key: 'Permissions-Policy',
+            value: 'camera=(), microphone=(), geolocation=(), interest-cohort=()',
+          },
+          // HSTS solo en producción (HTTPS)
+          ...(isProduction
+            ? [
+                {
+                  key: 'Strict-Transport-Security',
+                  value: 'max-age=31536000; includeSubDomains; preload',
+                },
+              ]
+            : []),
+          // Content Security Policy (fallback - nonces added dynamically in middleware)
+          {
+            key: 'Content-Security-Policy',
+            value: fallbackCSP,
+          },
+        ],
+      },
+    ];
+  },
   
   // Optimizaciones de imágenes (ya habilitado por defecto en Next.js 14)
   images: {
