@@ -10,8 +10,19 @@ export const viewport = {
 }
 
 export const metadata = {
-  title: 'Aplicación de Facturación',
-  description: 'Sistema completo de facturación web',
+  title: 'FacturaHub - Sistema de Facturación',
+  description: 'Sistema completo de facturación, gestión de clientes y análisis financiero',
+  manifest: '/manifest.json',
+  themeColor: '#0f172a',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'FacturaHub',
+  },
+  icons: {
+    icon: '/icons/icon-192x192.png',
+    apple: '/icons/icon-192x192.png',
+  },
 }
 
 export default async function RootLayout({
@@ -28,6 +39,14 @@ export default async function RootLayout({
       <head>
         {/* Pass nonce to client components via meta tag */}
         <meta name="csp-nonce" content={nonce} />
+        {/* PWA Meta Tags */}
+        <meta name="application-name" content="FacturaHub" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="FacturaHub" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <link rel="manifest" href="/manifest.json" />
+        <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
       </head>
       <body className="min-h-screen bg-background text-foreground" suppressHydrationWarning>
         <CSPNonceProvider>

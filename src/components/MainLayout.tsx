@@ -8,6 +8,7 @@ import ErrorBoundary from './ErrorBoundary';
 import { Toaster } from "@/components/ui/sonner";
 import { RealtimeNotifications } from './RealtimeNotifications';
 import { ServiceWorkerRegistration } from './ServiceWorkerRegistration';
+import { PWAInstallPrompt } from './PWAInstallPrompt';
 
 export default function MainLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const pathname = usePathname();
@@ -32,6 +33,7 @@ export default function MainLayout({ children }: Readonly<{ children: React.Reac
         </div>
         <Toaster />
         <RealtimeNotifications />
+        <PWAInstallPrompt />
       </ErrorBoundary>
     </AuthProvider>
   );

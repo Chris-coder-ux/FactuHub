@@ -9,8 +9,13 @@ import { logger } from '@/lib/logger';
  */
 export function ServiceWorkerRegistration() {
   useEffect(() => {
-    // Only register in browser and production
-    if (typeof window === 'undefined' || process.env.NODE_ENV !== 'production') {
+    // Only register in browser
+    if (typeof window === 'undefined') {
+      return;
+    }
+    
+    // In development, only register if explicitly enabled
+    if (process.env.NODE_ENV !== 'production' && process.env.NEXT_PUBLIC_ENABLE_SW !== 'true') {
       return;
     }
 

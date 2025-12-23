@@ -24,6 +24,7 @@
     "backup:restore": "tsx scripts/restore-backup.ts",
     "sri:generate": "tsx scripts/generate-sri-hash.ts",
     "cert:extract": "tsx scripts/extract-certificate-fingerprint.ts",
+    "pwa:icons": "tsx scripts/generate-pwa-icons.ts",
     "zip": "./scripts/create-zip.sh",
     "zip:custom": "./scripts/create-zip.sh",
     "archive": "./scripts/create-archive.sh zip",
