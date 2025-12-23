@@ -54,7 +54,7 @@ const analyticsMaterializedViewSchema = new Schema<IAnalyticsMaterializedView>(
     },
     expiresAt: {
       type: Date,
-      index: true, // TTL index will be created separately
+      // TTL index created explicitly below (line 68)
     },
   },
   {
