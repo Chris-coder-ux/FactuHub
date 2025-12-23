@@ -60,17 +60,33 @@ const nextConfig = {
     }
     
     // Suprimir warnings conocidos de Sentry/OpenTelemetry
+    // Nota: Estos warnings son inofensivos y vienen de la instrumentación dinámica
     const originalWarnings = config.ignoreWarnings || [];
     config.ignoreWarnings = [
       ...originalWarnings,
       // Warning de require-in-the-middle (usado por Sentry para instrumentación)
       // Este warning es inofensivo - Sentry necesita acceso dinámico a módulos
-      /node_modules\/require-in-the-middle/,
-      /Critical dependency.*require function is used in a way/,
+      {
+        module: /node_modules\/require-in-the-middle/,
+      },
+      {
+        message: /Critical dependency.*require function is used in a way/,
+      },
       // Otros warnings comunes de módulos de instrumentación
-      /node_modules\/@sentry/,
-      /node_modules\/@opentelemetry/,
+      {
+        module: /node_modules\/@sentry/,
+      },
+      {
+        module: /node_modules\/@opentelemetry/,
+      },
     ];
+    
+    // También suprimir en el logger de webpack
+    if (config.infrastructureLogging) {
+      config.infrastructureLogging.level = 'error';
+    } else {
+      config.infrastructureLogging = { level: 'error' };
+    }
     
     return config;
   },
