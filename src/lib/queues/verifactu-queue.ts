@@ -315,16 +315,27 @@ class VeriFactuQueue {
 
   /**
    * Get queue size (for monitoring)
+   * Safe method that won't throw errors if Redis is unavailable
    */
   async getSize(): Promise<number> {
     if (this.isUsingBull && this.bullQueue) {
-      const [waiting, active, delayed, failed] = await Promise.all([
-        this.bullQueue.getWaitingCount(),
-        this.bullQueue.getActiveCount(),
-        this.bullQueue.getDelayedCount(),
-        this.bullQueue.getFailedCount(),
-      ]);
-      return waiting + active + delayed + failed;
+      try {
+        const [waiting, active, delayed, failed] = await Promise.all([
+          this.bullQueue.getWaitingCount(),
+          this.bullQueue.getActiveCount(),
+          this.bullQueue.getDelayedCount(),
+          this.bullQueue.getFailedCount(),
+        ]);
+        return waiting + active + delayed + failed;
+      } catch (error) {
+        // If Bull/Redis fails, fall back to in-memory queue size
+        logger.warn('Failed to get Bull queue size, using in-memory queue', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        // Mark as not using Bull if connection fails
+        this.isUsingBull = false;
+        return this.inMemoryQueue.length;
+      }
     }
     return this.inMemoryQueue.length;
   }
