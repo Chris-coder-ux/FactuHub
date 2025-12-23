@@ -7,13 +7,13 @@ import { headers } from 'next/headers';
 export const viewport = {
   width: 'device-width',
   initialScale: 1,
+  themeColor: '#0f172a',
 }
 
 export const metadata = {
   title: 'FacturaHub - Sistema de Facturación',
   description: 'Sistema completo de facturación, gestión de clientes y análisis financiero',
   manifest: '/manifest.json',
-  themeColor: '#0f172a',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
