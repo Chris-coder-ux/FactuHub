@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import dbConnect from '@/lib/mongodb';
+import dbConnect, { getReadPreference } from '@/lib/mongodb';
 import Invoice from '@/lib/models/Invoice';
 import Client from '@/lib/models/Client';
 import { requireCompanyContext } from '@/lib/auth';
@@ -22,6 +22,9 @@ export async function GET(request: NextRequest) {
     
     await dbConnect();
     
+    // Use read preference for read-only report queries (can use read replicas)
+    const readPref = getReadPreference();
+    
     // Base match filter for company isolation
     const companyMatch = createCompanyFilter(companyId);
     
@@ -41,19 +44,19 @@ export async function GET(request: NextRequest) {
       Invoice.aggregate([
         { $match: { ...companyMatch, status: 'paid' } },
         { $group: { _id: null, total: { $sum: '$total' } } }
-      ]),
+      ]).read(readPref),
       Invoice.aggregate([
         { $match: { ...companyMatch, status: { $in: ['sent', 'draft'] } } },
         { $group: { _id: null, total: { $sum: '$total' } } }
-      ]),
+      ]).read(readPref),
       Invoice.aggregate([
         { $match: { ...companyMatch, status: 'overdue' } },
         { $group: { _id: null, total: { $sum: '$total' } } }
-      ]),
-      Client.countDocuments({ ...companyMatch, deletedAt: null }),
-      Invoice.countDocuments({ ...companyMatch, status: { $in: ['draft', 'sent'] } }),
-      Invoice.countDocuments({ ...companyMatch, status: 'overdue' }),
-      Invoice.countDocuments({ ...companyMatch, status: 'paid' }),
+      ]).read(readPref),
+      Client.countDocuments({ ...companyMatch, deletedAt: null }).read(readPref),
+      Invoice.countDocuments({ ...companyMatch, status: { $in: ['draft', 'sent'] } }).read(readPref),
+      Invoice.countDocuments({ ...companyMatch, status: 'overdue' }).read(readPref),
+      Invoice.countDocuments({ ...companyMatch, status: 'paid' }).read(readPref),
       Invoice.aggregate([
         { 
           $match: { 
@@ -65,9 +68,10 @@ export async function GET(request: NextRequest) {
           } 
         },
         { $group: { _id: null, total: { $sum: '$total' } } }
-      ]),
+      ]).read(readPref),
       Invoice.find(companyMatch)
         .populate('client', 'name email')
+        .read(readPref)
         .sort({ createdAt: -1 })
         .limit(5)
         .lean(),
@@ -83,11 +87,11 @@ export async function GET(request: NextRequest) {
           }
         },
         { $sort: { '_id.year': 1, '_id.month': 1 } }
-      ]),
+      ]).read(readPref),
       Invoice.aggregate([
         { $match: companyMatch },
         { $group: { _id: '$status', count: { $sum: 1 } } }
-      ])
+      ]).read(readPref)
     ]);
 
     const totalRevenue = totalRevenueResult[0]?.total || 0;

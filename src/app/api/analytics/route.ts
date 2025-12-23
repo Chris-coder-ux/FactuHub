@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireCompanyContext } from '@/lib/auth';
 import { requireCompanyPermission } from '@/lib/company-rbac';
-import dbConnect from '@/lib/mongodb';
+import dbConnect, { getReadPreference } from '@/lib/mongodb';
 import Invoice from '@/lib/models/Invoice';
 import Expense from '@/lib/models/Expense';
 import Product from '@/lib/models/Product';
 import Client from '@/lib/models/Client';
 import { createCompanyFilter, toCompanyObjectId } from '@/lib/mongodb-helpers';
 import { logger } from '@/lib/logger';
+import { AnalyticsMaterializedViewsService } from '@/lib/services/analytics-materialized-views';
+import { cacheService, cacheKeys, cacheTags, getCacheTTL } from '@/lib/cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,9 +54,77 @@ export async function GET(request: NextRequest) {
       ...(Object.keys(dateFilter).length > 0 && { date: dateFilter }),
     };
     
-    // 1. Profitability by Client
-    const clientProfitability = await Invoice.aggregate([
-      { $match: { ...invoiceMatch, status: 'paid' } },
+    // Use read preference for read-only analytics queries (can use read replicas)
+    const readPref = getReadPreference();
+    
+    // Determine period key for materialized views and cache
+    const periodKey = startDate && endDate 
+      ? `${startDate}_${endDate}`
+      : 'all';
+    const period: 'daily' | 'monthly' | 'all_time' = startDate && endDate ? 'daily' : 'all_time';
+    const parsedStartDate = startDate ? new Date(startDate) : undefined;
+    const parsedEndDate = endDate ? new Date(endDate) : undefined;
+
+    // Generate cache key for analytics
+    const analyticsCacheKey = cacheKeys.analytics(companyId, periodKey);
+
+    // Try to get from Redis cache first (fastest layer)
+    const cachedAnalytics = await cacheService.get<any>(analyticsCacheKey);
+    if (cachedAnalytics) {
+      logger.info('Analytics served from Redis cache', { companyId, periodKey });
+      return NextResponse.json(cachedAnalytics);
+    }
+
+    // Try to get from materialized views second (if enabled)
+    const useMaterializedViews = process.env.ENABLE_ANALYTICS_MATERIALIZED_VIEWS === 'true';
+    
+    let clientProfitability: any[];
+    if (useMaterializedViews) {
+      const cached = await AnalyticsMaterializedViewsService.getView<any[]>({
+        companyId,
+        viewType: 'client_profitability',
+        period,
+        periodKey,
+        startDate: parsedStartDate,
+        endDate: parsedEndDate,
+        maxAge: 3600, // 1 hour
+      });
+      
+      if (cached) {
+        clientProfitability = cached;
+      } else {
+        // Calculate and cache
+        clientProfitability = await calculateClientProfitability(invoiceMatch, readPref);
+        // Save asynchronously (don't block response)
+        AnalyticsMaterializedViewsService.generateClientProfitability(
+          companyId,
+          parsedStartDate,
+          parsedEndDate
+        ).catch(err => logger.warn('Failed to save materialized view', { error: err }));
+      }
+    } else {
+      clientProfitability = await calculateClientProfitability(invoiceMatch, readPref);
+    }
+
+    // Helper function to calculate client profitability
+    async function calculateClientProfitability(invoiceMatch: any, readPref: any) {
+      return await Invoice.aggregate([
+      // Early filtering using indexes (companyId, status, issuedDate)
+      { 
+        $match: { 
+          ...invoiceMatch, 
+          status: 'paid' 
+        } 
+      },
+      // Project only needed fields early to reduce data size
+      {
+        $project: {
+          client: 1,
+          total: 1,
+          subtotal: 1,
+        },
+      },
+      // Group with reduced data
       {
         $group: {
           _id: '$client',
@@ -64,15 +134,25 @@ export async function GET(request: NextRequest) {
           averageInvoiceValue: { $avg: '$total' },
         },
       },
+      // Optimized lookup with projection to only fetch needed fields
       {
         $lookup: {
           from: 'clients',
           localField: '_id',
           foreignField: '_id',
           as: 'clientInfo',
+          pipeline: [
+            {
+              $project: {
+                name: 1,
+                email: 1,
+              },
+            },
+          ],
         },
       },
       { $unwind: { path: '$clientInfo', preserveNullAndEmptyArrays: true } },
+      // Final projection with calculations
       {
         $project: {
           clientId: '$_id',
@@ -97,23 +177,80 @@ export async function GET(request: NextRequest) {
           averageInvoiceValue: 1,
         },
       },
+      // Sort and limit after reducing data
       { $sort: { totalRevenue: -1 } },
       { $limit: 50 }, // Top 50 clients
-    ]);
+      ]).read(readPref);
+    }
     
-    // 2. Profitability by Product
-    const productProfitability = await Invoice.aggregate([
-      { $match: { ...invoiceMatch, status: 'paid' } },
+    // 2. Profitability by Product (Optimized)
+    let productProfitability: any[];
+    if (useMaterializedViews) {
+      const cached = await AnalyticsMaterializedViewsService.getView<any[]>({
+        companyId,
+        viewType: 'product_profitability',
+        period,
+        periodKey,
+        startDate: parsedStartDate,
+        endDate: parsedEndDate,
+        maxAge: 3600,
+      });
+      
+      if (cached) {
+        productProfitability = cached;
+      } else {
+        productProfitability = await calculateProductProfitability(invoiceMatch, readPref);
+        AnalyticsMaterializedViewsService.generateProductProfitability(
+          companyId,
+          parsedStartDate,
+          parsedEndDate
+        ).catch(err => logger.warn('Failed to save materialized view', { error: err }));
+      }
+    } else {
+      productProfitability = await calculateProductProfitability(invoiceMatch, readPref);
+    }
+
+    async function calculateProductProfitability(invoiceMatch: any, readPref: any) {
+      return await Invoice.aggregate([
+      // Early filtering using indexes
+      { 
+        $match: { 
+          ...invoiceMatch, 
+          status: 'paid' 
+        } 
+      },
+      // Project only needed fields before unwind
+      {
+        $project: {
+          _id: 1,
+          items: {
+            product: 1,
+            total: 1,
+            quantity: 1,
+            price: 1,
+          },
+        },
+      },
+      // Unwind items after reducing invoice data
       { $unwind: '$items' },
+      // Optimized lookup with projection to only fetch product name
       {
         $lookup: {
           from: 'products',
           localField: 'items.product',
           foreignField: '_id',
           as: 'productInfo',
+          pipeline: [
+            {
+              $project: {
+                name: 1,
+              },
+            },
+          ],
         },
       },
       { $unwind: { path: '$productInfo', preserveNullAndEmptyArrays: true } },
+      // Group with reduced data
       {
         $group: {
           _id: '$items.product',
@@ -124,6 +261,7 @@ export async function GET(request: NextRequest) {
           invoiceCount: { $addToSet: '$_id' }, // Unique invoices
         },
       },
+      // Final projection with calculations
       {
         $project: {
           productId: '$_id',
@@ -138,18 +276,30 @@ export async function GET(request: NextRequest) {
           margin: 30, // Simplified
         },
       },
+      // Sort and limit after reducing data
       { $sort: { totalRevenue: -1 } },
       { $limit: 50 }, // Top 50 products
-    ]);
+      ]).read(readPref);
+    }
     
-    // 3. Cash Flow
+    // 3. Cash Flow (Optimized)
+    // Optimization: Early projection to reduce data, date calculations after filtering
     const cashFlowIn = await Invoice.aggregate([
+      // Early filtering using indexes
       {
         $match: {
           ...invoiceMatch,
           status: 'paid',
         },
       },
+      // Project only needed fields early
+      {
+        $project: {
+          issuedDate: 1,
+          total: 1,
+        },
+      },
+      // Group with date calculations (after reducing data)
       {
         $group: {
           _id: {
@@ -161,15 +311,24 @@ export async function GET(request: NextRequest) {
         },
       },
       { $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1 } },
-    ]);
+    ]).read(readPref); // Use read replica if available
     
     const cashFlowOut = await Expense.aggregate([
+      // Early filtering using indexes
       {
         $match: {
           ...expenseMatch,
           status: { $in: ['approved', 'paid'] },
         },
       },
+      // Project only needed fields early
+      {
+        $project: {
+          date: 1,
+          amount: 1,
+        },
+      },
+      // Group with date calculations (after reducing data)
       {
         $group: {
           _id: {
@@ -181,7 +340,7 @@ export async function GET(request: NextRequest) {
         },
       },
       { $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1 } },
-    ]);
+    ]).read(readPref); // Use read replica if available
     
     // Combine cash flow data
     const cashFlowMap = new Map<string, { in: number; out: number; net: number; date: string }>();
@@ -204,14 +363,50 @@ export async function GET(request: NextRequest) {
     
     const cashFlow = Array.from(cashFlowMap.values()).sort((a, b) => a.date.localeCompare(b.date));
     
-    // 4. Trends (monthly revenue, expenses, profit)
-    const revenueTrends = await Invoice.aggregate([
+    // 4. Trends (monthly revenue, expenses, profit) (Optimized)
+    let trends: any[];
+    if (useMaterializedViews) {
+      const cached = await AnalyticsMaterializedViewsService.getView<any[]>({
+        companyId,
+        viewType: 'trends',
+        period,
+        periodKey,
+        startDate: parsedStartDate,
+        endDate: parsedEndDate,
+        maxAge: 3600,
+      });
+      
+      if (cached) {
+        trends = cached;
+      } else {
+        trends = await calculateTrends(invoiceMatch, expenseMatch, readPref);
+        AnalyticsMaterializedViewsService.generateTrends(
+          companyId,
+          parsedStartDate,
+          parsedEndDate
+        ).catch(err => logger.warn('Failed to save materialized view', { error: err }));
+      }
+    } else {
+      trends = await calculateTrends(invoiceMatch, expenseMatch, readPref);
+    }
+
+    async function calculateTrends(invoiceMatch: any, expenseMatch: any, readPref: any) {
+      const revenueTrends = await Invoice.aggregate([
+      // Early filtering using indexes
       {
         $match: {
           ...invoiceMatch,
           status: 'paid',
         },
       },
+      // Project only needed fields early
+      {
+        $project: {
+          issuedDate: 1,
+          total: 1,
+        },
+      },
+      // Group with date calculations (after reducing data)
       {
         $group: {
           _id: {
@@ -223,64 +418,68 @@ export async function GET(request: NextRequest) {
         },
       },
       { $sort: { '_id.year': 1, '_id.month': 1 } },
-    ]);
-    
-    const expenseTrends = await Expense.aggregate([
-      {
-        $match: {
-          ...expenseMatch,
-          status: { $in: ['approved', 'paid'] },
+      ]).read(readPref);
+      
+      const expenseTrends = await Expense.aggregate([
+        {
+          $match: expenseMatch,
         },
-      },
-      {
-        $group: {
-          _id: {
-            year: { $year: '$date' },
-            month: { $month: '$date' },
+        {
+          $project: {
+            date: 1,
+            amount: 1,
           },
-          expenses: { $sum: '$amount' },
-          expenseCount: { $sum: 1 },
         },
-      },
-      { $sort: { '_id.year': 1, '_id.month': 1 } },
-    ]);
-    
-    // Combine trends
-    const trendsMap = new Map<string, { month: string; revenue: number; expenses: number; profit: number; invoiceCount: number; expenseCount: number }>();
-    
-    revenueTrends.forEach((item) => {
-      const monthKey = `${item._id.year}-${String(item._id.month).padStart(2, '0')}`;
-      const existing = trendsMap.get(monthKey) || {
-        month: monthKey,
-        revenue: 0,
-        expenses: 0,
-        profit: 0,
-        invoiceCount: 0,
-        expenseCount: 0,
-      };
-      existing.revenue += item.revenue;
-      existing.invoiceCount += item.invoiceCount;
-      existing.profit = existing.revenue - existing.expenses;
-      trendsMap.set(monthKey, existing);
-    });
-    
-    expenseTrends.forEach((item) => {
-      const monthKey = `${item._id.year}-${String(item._id.month).padStart(2, '0')}`;
-      const existing = trendsMap.get(monthKey) || {
-        month: monthKey,
-        revenue: 0,
-        expenses: 0,
-        profit: 0,
-        invoiceCount: 0,
-        expenseCount: 0,
-      };
-      existing.expenses += item.expenses;
-      existing.expenseCount += item.expenseCount;
-      existing.profit = existing.revenue - existing.expenses;
-      trendsMap.set(monthKey, existing);
-    });
-    
-    const trends = Array.from(trendsMap.values()).sort((a, b) => a.month.localeCompare(b.month));
+        {
+          $group: {
+            _id: {
+              year: { $year: '$date' },
+              month: { $month: '$date' },
+            },
+            expenses: { $sum: '$amount' },
+            expenseCount: { $sum: 1 },
+          },
+        },
+        { $sort: { '_id.year': 1, '_id.month': 1 } },
+      ]).read(readPref);
+      
+      // Combine trends
+      const trendsMap = new Map<string, { month: string; revenue: number; expenses: number; profit: number; invoiceCount: number; expenseCount: number }>();
+      
+      revenueTrends.forEach((item) => {
+        const monthKey = `${item._id.year}-${String(item._id.month).padStart(2, '0')}`;
+        const existing = trendsMap.get(monthKey) || {
+          month: monthKey,
+          revenue: 0,
+          expenses: 0,
+          profit: 0,
+          invoiceCount: 0,
+          expenseCount: 0,
+        };
+        existing.revenue += item.revenue;
+        existing.invoiceCount += item.invoiceCount;
+        existing.profit = existing.revenue - existing.expenses;
+        trendsMap.set(monthKey, existing);
+      });
+      
+      expenseTrends.forEach((item) => {
+        const monthKey = `${item._id.year}-${String(item._id.month).padStart(2, '0')}`;
+        const existing = trendsMap.get(monthKey) || {
+          month: monthKey,
+          revenue: 0,
+          expenses: 0,
+          profit: 0,
+          invoiceCount: 0,
+          expenseCount: 0,
+        };
+        existing.expenses += item.expenses;
+        existing.expenseCount += item.expenseCount;
+        existing.profit = existing.revenue - existing.expenses;
+        trendsMap.set(monthKey, existing);
+      });
+      
+      return Array.from(trendsMap.values()).sort((a, b) => a.month.localeCompare(b.month));
+    }
     
     // 5. Summary metrics
     const totalRevenue = clientProfitability.reduce((sum, c) => sum + c.totalRevenue, 0);
@@ -290,7 +489,7 @@ export async function GET(request: NextRequest) {
       ? clientProfitability.reduce((sum, c) => sum + c.margin, 0) / clientProfitability.length
       : 0;
     
-    return NextResponse.json({
+    const analyticsResponse = {
       clientProfitability,
       productProfitability,
       cashFlow,
@@ -303,7 +502,17 @@ export async function GET(request: NextRequest) {
         clientCount: clientProfitability.length,
         productCount: productProfitability.length,
       },
+    };
+
+    // Cache analytics response
+    await cacheService.set(analyticsCacheKey, analyticsResponse, {
+      ttl: getCacheTTL('analytics'),
+      tags: [cacheTags.analytics(companyId)],
+    }).catch(err => {
+      logger.warn('Failed to cache analytics response', { error: err, companyId });
     });
+    
+    return NextResponse.json(analyticsResponse);
   } catch (error: any) {
     logger.error('Get analytics error', error);
     

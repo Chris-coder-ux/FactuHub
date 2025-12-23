@@ -4,7 +4,16 @@ import { requireCompanyPermission } from '@/lib/company-rbac';
 import connectDB from '@/lib/mongodb';
 import BankTransaction from '@/lib/models/BankTransaction';
 import BankAccount from '@/lib/models/BankAccount';
-import { getPaginationParams, validateSortParam, createPaginatedResponse } from '@/lib/pagination';
+import {
+  getPaginationParams,
+  getCursorPaginationParams,
+  getPaginationMode,
+  validateSortParam,
+  createPaginatedResponse,
+  createCursorPaginatedResponse,
+  buildCursorFilter,
+  ensureIdInSort,
+} from '@/lib/pagination';
 import { createCompanyFilter, toCompanyObjectId } from '@/lib/mongodb-helpers';
 import { logger } from '@/lib/logger';
 
@@ -25,7 +34,7 @@ export async function GET(request: NextRequest) {
     await connectDB();
     
     const { searchParams } = new URL(request.url);
-    const { page, limit, skip } = getPaginationParams(searchParams);
+    const paginationMode = getPaginationMode(searchParams);
     const sortParam = searchParams.get('sort');
     const bankAccountId = searchParams.get('bankAccountId');
     const reconciled = searchParams.get('reconciled');
@@ -37,8 +46,8 @@ export async function GET(request: NextRequest) {
     
     const { field, order } = validateSortParam(sortParam, ['date', 'amount', 'description', 'createdAt']);
     
-    // Build filter
-    const filter: any = {};
+    // Build base filter
+    const baseFilter: any = {};
     
     // Company filter: get all bank accounts for this company
     const bankAccounts = await BankAccount.find(
@@ -47,16 +56,19 @@ export async function GET(request: NextRequest) {
     
     const bankAccountIds = bankAccounts.map(acc => acc._id);
     if (bankAccountIds.length === 0) {
-      return NextResponse.json(createPaginatedResponse([], 0, { page, limit, skip }));
+      if (paginationMode === 'cursor') {
+        return NextResponse.json(createCursorPaginatedResponse([], getCursorPaginationParams(searchParams)));
+      }
+      return NextResponse.json(createPaginatedResponse([], 0, getPaginationParams(searchParams)));
     }
     
-    filter.bankAccountId = { $in: bankAccountIds };
+    baseFilter.bankAccountId = { $in: bankAccountIds };
     
     // Filter by specific bank account
     if (bankAccountId) {
       const accountId = toCompanyObjectId(bankAccountId);
       if (bankAccountIds.some(id => id.toString() === accountId.toString())) {
-        filter.bankAccountId = accountId;
+        baseFilter.bankAccountId = accountId;
       } else {
         return NextResponse.json({ error: 'Bank account not found or unauthorized' }, { status: 403 });
       }
@@ -64,47 +76,72 @@ export async function GET(request: NextRequest) {
     
     // Filter by reconciled status
     if (reconciled === 'true') {
-      filter.reconciled = true;
+      baseFilter.reconciled = true;
     } else if (reconciled === 'false') {
-      filter.reconciled = false;
+      baseFilter.reconciled = false;
     }
     
     // Filter by date range
     if (startDate || endDate) {
-      filter.date = {};
+      baseFilter.date = {};
       if (startDate) {
-        filter.date.$gte = new Date(startDate);
+        baseFilter.date.$gte = new Date(startDate);
       }
       if (endDate) {
-        filter.date.$lte = new Date(endDate);
+        baseFilter.date.$lte = new Date(endDate);
       }
     }
     
     // Filter by amount range
     if (minAmount || maxAmount) {
-      filter.amount = {};
+      baseFilter.amount = {};
       if (minAmount) {
-        filter.amount.$gte = parseFloat(minAmount);
+        baseFilter.amount.$gte = parseFloat(minAmount);
       }
       if (maxAmount) {
-        filter.amount.$lte = parseFloat(maxAmount);
+        baseFilter.amount.$lte = parseFloat(maxAmount);
       }
     }
     
     // Search filter (description)
     if (search) {
-      filter.description = { $regex: search, $options: 'i' };
+      baseFilter.description = { $regex: search, $options: 'i' };
     }
     
+    // Cursor-based pagination (more efficient for large datasets)
+    if (paginationMode === 'cursor') {
+      const cursorParams = getCursorPaginationParams(searchParams);
+      const sortObj = ensureIdInSort({ field, order });
+      
+      // Build filter with cursor
+      const filter = cursorParams.cursor
+        ? buildCursorFilter(baseFilter, cursorParams.cursor, field, order)
+        : baseFilter;
+      
+      // Fetch one extra item to determine if there's a next page
+      const transactions = await BankTransaction.find(filter)
+        .populate('bankAccountId', 'name accountNumber')
+        .populate('reconciledInvoiceId', 'invoiceNumber total')
+        .sort(sortObj)
+        .limit(cursorParams.limit + 1) // Fetch one extra to check hasMore
+        .lean();
+      
+      const response = createCursorPaginatedResponse(transactions, cursorParams);
+      return NextResponse.json(response);
+    }
+    
+    // Offset-based pagination (backward compatible)
+    const { page, limit, skip } = getPaginationParams(searchParams);
+    
     const [transactions, total] = await Promise.all([
-      BankTransaction.find(filter)
+      BankTransaction.find(baseFilter)
         .populate('bankAccountId', 'name accountNumber')
         .populate('reconciledInvoiceId', 'invoiceNumber total')
         .sort({ [field]: order })
         .skip(skip)
         .limit(limit)
         .lean(),
-      BankTransaction.countDocuments(filter)
+      BankTransaction.countDocuments(baseFilter)
     ]);
     
     const response = createPaginatedResponse(transactions, total, { page, limit, skip });

@@ -13,15 +13,71 @@ import {
   decrypt
 } from '@/lib/encryption';
 import { toCompanyObjectId } from '@/lib/mongodb-helpers';
+import { cacheService, getCacheTTL } from '@/lib/cache';
+import { logger } from '@/lib/logger';
 
 /**
- * GET /api/settings - Retrieve company settings
+ * GET /api/settings - Retrieve company settings (with caching)
  */
 export async function GET() {
   try {
     // Require company context for multi-company support
     const { session, companyId } = await requireCompanyContext();
     
+    // Cache key for company settings
+    const cacheKey = `company_settings_${companyId}`;
+    
+    // Try to get from cache first
+    try {
+      const cachedSettings = await cacheService.get<any>(cacheKey);
+      if (cachedSettings) {
+        logger.debug('Settings retrieved from cache', { companyId });
+        
+        // Decrypt sensitive fields before returning (cache stores encrypted data)
+        const decryptedSettings = { ...cachedSettings };
+        
+        // Decrypt VeriFactu certificate password if present
+        if (decryptedSettings.verifactuCertificatePassword && isEncrypted(decryptedSettings.verifactuCertificatePassword)) {
+          try {
+            decryptedSettings.verifactuCertificatePassword = await decryptCertificatePassword(decryptedSettings.verifactuCertificatePassword);
+          } catch (error) {
+            logger.error('Error decrypting certificate password from cache', { error });
+            decryptedSettings.verifactuCertificatePassword = '';
+          }
+        }
+        
+        // Decrypt AEAT credentials if present
+        if (decryptedSettings.aeatUsername && isEncrypted(decryptedSettings.aeatUsername)) {
+          try {
+            const credentials = await decryptAeatCredentials(
+              decryptedSettings.aeatUsername,
+              decryptedSettings.aeatPassword || ''
+            );
+            decryptedSettings.aeatUsername = credentials.username;
+            decryptedSettings.aeatPassword = credentials.password;
+          } catch (error) {
+            logger.error('Error decrypting AEAT credentials from cache', { error });
+            decryptedSettings.aeatUsername = '';
+            decryptedSettings.aeatPassword = '';
+          }
+        } else if (decryptedSettings.aeatPassword && isEncrypted(decryptedSettings.aeatPassword)) {
+          // If only password is encrypted (edge case)
+          try {
+            decryptedSettings.aeatPassword = await decrypt(decryptedSettings.aeatPassword);
+          } catch (error) {
+            logger.error('Error decrypting AEAT password from cache', { error });
+            decryptedSettings.aeatPassword = '';
+          }
+        }
+        
+        return NextResponse.json({ data: decryptedSettings });
+      }
+    } catch (cacheError) {
+      // If cache fails, continue to database query
+      logger.warn('Cache read failed, falling back to database', { error: cacheError });
+    }
+    
+    // Cache miss or error - fetch from database
     await dbConnect();
     
     // Filter settings by companyId to prevent data leakage between companies
@@ -32,15 +88,25 @@ export async function GET() {
       return NextResponse.json({ data: null });
     }
     
+    // Cache the encrypted settings (never cache decrypted data for security)
+    const settingsToCache = settings.toObject();
+    try {
+      await cacheService.set(cacheKey, settingsToCache, { ttl: getCacheTTL('settings') });
+      logger.debug('Settings cached', { companyId });
+    } catch (cacheError) {
+      // If cache write fails, continue without caching
+      logger.warn('Cache write failed, continuing without cache', { error: cacheError });
+    }
+    
     // Decrypt sensitive fields before returning
-    const decryptedSettings = { ...settings.toObject() };
+    const decryptedSettings = { ...settingsToCache };
     
     // Decrypt VeriFactu certificate password if present
     if (decryptedSettings.verifactuCertificatePassword && isEncrypted(decryptedSettings.verifactuCertificatePassword)) {
       try {
         decryptedSettings.verifactuCertificatePassword = await decryptCertificatePassword(decryptedSettings.verifactuCertificatePassword);
       } catch (error) {
-        console.error('Error decrypting certificate password:', error);
+        logger.error('Error decrypting certificate password:', error);
         // If decryption fails, return empty to force re-entry
         decryptedSettings.verifactuCertificatePassword = '';
       }
@@ -56,7 +122,7 @@ export async function GET() {
         decryptedSettings.aeatUsername = credentials.username;
         decryptedSettings.aeatPassword = credentials.password;
       } catch (error) {
-        console.error('Error decrypting AEAT credentials:', error);
+        logger.error('Error decrypting AEAT credentials:', error);
         decryptedSettings.aeatUsername = '';
         decryptedSettings.aeatPassword = '';
       }
@@ -65,14 +131,14 @@ export async function GET() {
       try {
         decryptedSettings.aeatPassword = await decrypt(decryptedSettings.aeatPassword);
       } catch (error) {
-        console.error('Error decrypting AEAT password:', error);
+        logger.error('Error decrypting AEAT password:', error);
         decryptedSettings.aeatPassword = '';
       }
     }
     
     return NextResponse.json({ data: decryptedSettings });
   } catch (error: any) {
-    console.error('Get settings error:', error);
+    logger.error('Get settings error:', error);
     
     // Handle permission errors
     if (error.message?.includes('Company context required')) {
@@ -144,6 +210,16 @@ export async function PATCH(request: NextRequest) {
         ...encryptedBody,
         companyId: toCompanyObjectId(companyId),
       });
+    }
+    
+    // Invalidate cache after update
+    const cacheKey = `company_settings_${companyId}`;
+    try {
+      await cacheService.delete(cacheKey);
+      logger.debug('Settings cache invalidated after update', { companyId });
+    } catch (cacheError) {
+      // If cache invalidation fails, log but continue
+      logger.warn('Cache invalidation failed', { error: cacheError });
     }
     
     // Decrypt sensitive fields before returning (for security, don't return encrypted values)

@@ -9,7 +9,7 @@ import { clientSchema } from '@/lib/validations';
 import { logger } from '@/lib/logger';
 import { sanitizeObject } from '@/lib/sanitization';
 import { createCompanyFilter, toCompanyObjectId } from '@/lib/mongodb-helpers';
-import { cacheService, cacheKeys, cacheTags } from '@/lib/cache';
+import { cacheService, cacheKeys, cacheTags, getCacheTTL } from '@/lib/cache';
 
 export async function GET(request: NextRequest) {
   try {
@@ -52,10 +52,10 @@ export async function GET(request: NextRequest) {
       Client.countDocuments(filter)
     ]);
     
-    // Cache first page for 1 hour
+    // Cache first page
     if (page === 1) {
       await cacheService.set(cacheKey, { clients, total }, {
-        ttl: 3600,
+        ttl: getCacheTTL('clients'),
         tags: [cacheTags.clients(companyId)],
       });
     }

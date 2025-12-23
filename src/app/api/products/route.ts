@@ -8,7 +8,7 @@ import { getPaginationParams, validateSortParam, createPaginatedResponse } from 
 import { productSchema } from '@/lib/validations';
 import { createCompanyFilter, toCompanyObjectId } from '@/lib/mongodb-helpers';
 import { logger } from '@/lib/logger';
-import { cacheService, cacheKeys, cacheTags } from '@/lib/cache';
+import { cacheService, cacheKeys, cacheTags, getCacheTTL } from '@/lib/cache';
 
 export async function GET(request: NextRequest) {
   try {
@@ -60,10 +60,10 @@ export async function GET(request: NextRequest) {
       Product.countDocuments(filter)
     ]);
     
-    // Cache first page for 1 hour
+    // Cache first page
     if (page === 1) {
       await cacheService.set(cacheKey, { products, total }, {
-        ttl: 3600,
+        ttl: getCacheTTL('products'),
         tags: [cacheTags.products(companyId)],
       });
     }

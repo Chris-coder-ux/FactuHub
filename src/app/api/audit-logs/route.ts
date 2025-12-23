@@ -3,7 +3,15 @@ import dbConnect from '@/lib/mongodb';
 import { requireCompanyContext } from '@/lib/auth';
 import { requireCompanyPermission } from '@/lib/company-rbac';
 import { AuditService } from '@/lib/services/audit-service';
-import { getPaginationParams, createPaginatedResponse } from '@/lib/pagination';
+import {
+  getPaginationParams,
+  getCursorPaginationParams,
+  getPaginationMode,
+  createPaginatedResponse,
+  createCursorPaginatedResponse,
+  buildCursorFilter,
+  ensureIdInSort,
+} from '@/lib/pagination';
 import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
@@ -24,7 +32,7 @@ export async function GET(request: NextRequest) {
     await dbConnect();
     
     const { searchParams } = new URL(request.url);
-    const { page, limit, skip } = getPaginationParams(searchParams);
+    const paginationMode = getPaginationMode(searchParams);
     
     // Filtros
     const userId = searchParams.get('userId') || undefined;
@@ -38,6 +46,30 @@ export async function GET(request: NextRequest) {
     // Fechas
     const startDate = searchParams.get('startDate') ? new Date(searchParams.get('startDate')!) : undefined;
     const endDate = searchParams.get('endDate') ? new Date(searchParams.get('endDate')!) : undefined;
+    
+    // Cursor-based pagination (more efficient for large datasets)
+    if (paginationMode === 'cursor') {
+      const cursorParams = getCursorPaginationParams(searchParams);
+      const sortObj = ensureIdInSort({ field: 'createdAt', order: -1 });
+      
+      const { logs } = await AuditService.getLogsWithCursor(companyId, {
+        userId,
+        action,
+        resourceType,
+        resourceId,
+        success,
+        startDate,
+        endDate,
+        cursor: cursorParams.cursor,
+        limit: cursorParams.limit + 1, // Fetch one extra to check hasMore
+      });
+      
+      const response = createCursorPaginatedResponse(logs, cursorParams);
+      return NextResponse.json(response);
+    }
+    
+    // Offset-based pagination (backward compatible)
+    const { page, limit, skip } = getPaginationParams(searchParams);
     
     const { logs, total } = await AuditService.getLogs(companyId, {
       userId,
