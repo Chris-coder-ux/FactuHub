@@ -19,9 +19,9 @@ import {
   User,
   Loader2
 } from 'lucide-react';
-import { generateInvoicePDF } from '@/lib/pdf-generator';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { useInvoiceActions } from '@/hooks/useInvoiceActions';
 
 export default function PublicInvoicePage() {
   const params = useParams();
@@ -29,6 +29,9 @@ export default function PublicInvoicePage() {
   const { data: settings } = useSWR<{ data: Settings }>('/api/settings', fetcher);
   
   const [isPaying, setIsPaying] = useState(false);
+  
+  // Use invoice actions hook for PDF download
+  const { downloadPDF, isDownloadingPDF } = useInvoiceActions();
 
   if (invoiceError) {
     return (
@@ -97,8 +100,14 @@ export default function PublicInvoicePage() {
             )}
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => generateInvoicePDF(invoice, settings?.data || null)}>
-              <Download className="mr-2 h-4 w-4" /> PDF
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => downloadPDF(invoice, settings?.data || null)}
+              disabled={isDownloadingPDF}
+            >
+              <Download className="mr-2 h-4 w-4" /> 
+              {isDownloadingPDF ? 'Descargando...' : 'PDF'}
             </Button>
           </div>
         </div>

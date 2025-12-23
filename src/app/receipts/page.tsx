@@ -208,6 +208,8 @@ export default function ReceiptsPage() {
                       alt={receipt.originalFilename}
                       fill
                       className="object-cover"
+                      loading="lazy"
+                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                     />
                     <div className="absolute top-2 right-2">
                       <Badge className={getStatusColor(receipt.status)}>
@@ -308,6 +310,8 @@ export default function ReceiptsPage() {
                   alt={selectedReceipt.originalFilename}
                   fill
                   className="object-contain"
+                  loading="lazy"
+                  sizes="(max-width: 600px) 100vw, 600px"
                 />
               </div>
 

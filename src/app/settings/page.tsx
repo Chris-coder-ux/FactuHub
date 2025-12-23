@@ -24,6 +24,7 @@ import { toast } from 'sonner';
 import { Save, Building2, CreditCard, Cog, Globe, Loader2, FileCheck, Shield, Upload, Mail, History } from 'lucide-react';
 import Link from 'next/link';
 import BankingSettings from '@/components/settings/BankingSettings';
+import RedisSettings from '@/components/settings/RedisSettings';
 
 type SettingsFormData = z.infer<typeof settingsSchema> & {
   currency: string;
@@ -526,6 +527,9 @@ export default function SettingsPage() {
 
         {/* Banking Settings */}
         <BankingSettings bankAccounts={(bankingData as any)?.bankAccounts || []} />
+
+        {/* Redis Settings */}
+        <RedisSettings />
 
         <div className="flex justify-end pt-4">
           <Button type="submit" size="lg" disabled={isSaving}>

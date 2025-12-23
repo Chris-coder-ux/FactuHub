@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { EmptyState } from '@/components/EmptyState';
 import { Search, Plus, Users, Pencil, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useClientActions } from '@/hooks/useClientActions';
 
 interface ClientsResponse {
   data: Client[];
@@ -26,6 +27,13 @@ export default function ClientsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Use client actions hook
+  const { deleteClient } = useClientActions({
+    onSuccess: () => {
+      mutate('/api/clients');
+    },
+  });
 
   const clients = useMemo(() => {
     return Array.isArray(clientsData) ? clientsData : clientsData?.data || [];
@@ -40,6 +48,22 @@ export default function ClientsPage() {
   }, [clients, searchQuery]);
 
   const handleFormSubmit = async (data: any) => {
+    // Optimistic update for editing existing client
+    if (editingClient?._id) {
+      const updatedClient = { ...editingClient, ...data };
+      mutate(
+        '/api/clients',
+        (current: any) => {
+          if (!current) return current;
+          const clients = Array.isArray(current) ? current : current.data || [];
+          return Array.isArray(current)
+            ? clients.map((c: Client) => c._id === editingClient._id ? updatedClient : c)
+            : { ...current, data: clients.map((c: Client) => c._id === editingClient._id ? updatedClient : c) };
+        },
+        false // Don't revalidate immediately
+      );
+    }
+
     try {
       const method = editingClient ? 'PUT' : 'POST';
       const url = editingClient ? `/api/clients/${editingClient._id}` : '/api/clients';
@@ -50,8 +74,15 @@ export default function ClientsPage() {
         body: JSON.stringify(data),
       });
 
-      if (!res.ok) throw new Error('Error saving client');
+      if (!res.ok) {
+        // Revert optimistic update on error
+        if (editingClient?._id) {
+          mutate('/api/clients');
+        }
+        throw new Error('Error saving client');
+      }
 
+      // Revalidate to get server state
       mutate('/api/clients');
       setDialogOpen(false);
       setEditingClient(null);
@@ -66,18 +97,9 @@ export default function ClientsPage() {
     setDialogOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
-    toast.promise(
-      async () => {
-         await fetch(`/api/clients/${id}`, { method: 'DELETE' });
-         mutate('/api/clients');
-      },
-      {
-        loading: 'Eliminando cliente...',
-        success: 'Cliente eliminado',
-        error: 'Error al eliminar cliente',
-      }
-    );
+  const handleDelete = async (client: Client) => {
+    if (!client._id) return;
+    await deleteClient(client);
   };
 
   if (error) return <div className="p-6 text-destructive">Error al cargar clientes</div>;
@@ -103,6 +125,7 @@ export default function ClientsPage() {
               <DialogTitle>{editingClient ? 'Editar Cliente' : 'Nuevo Cliente'}</DialogTitle>
             </DialogHeader>
             <ClientForm 
+              key={editingClient?._id || 'new'} 
               initialData={editingClient || undefined} 
               onSubmit={handleFormSubmit}
             />
@@ -178,7 +201,7 @@ export default function ClientsPage() {
                       <Button variant="ghost" size="icon" onClick={() => handleEdit(client)} className="h-8 w-8 hover:text-primary">
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(client._id!)} className="h-8 w-8 hover:text-destructive">
+                      <Button variant="ghost" size="icon" onClick={() => handleDelete(client)} className="h-8 w-8 hover:text-destructive">
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>

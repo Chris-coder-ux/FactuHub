@@ -15,6 +15,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { Search, Plus, Package, Pencil, Trash2, AlertTriangle, Share2, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useProductActions } from '@/hooks/useProductActions';
 
 interface ProductsResponse {
   data: Product[];
@@ -27,6 +28,13 @@ export default function ProductsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Use product actions hook
+  const { deleteProduct } = useProductActions({
+    onSuccess: () => {
+      mutate('/api/products');
+    },
+  });
 
   const products = useMemo(() => {
     return Array.isArray(productsData) ? productsData : productsData?.data || [];
@@ -40,6 +48,22 @@ export default function ProductsPage() {
   }, [products, searchQuery]);
 
   const handleFormSubmit = async (data: any) => {
+    // Optimistic update for editing existing product
+    if (editingProduct?._id) {
+      const updatedProduct = { ...editingProduct, ...data };
+      mutate(
+        '/api/products',
+        (current: any) => {
+          if (!current) return current;
+          const products = Array.isArray(current) ? current : current.data || [];
+          return Array.isArray(current)
+            ? products.map((p: Product) => p._id === editingProduct._id ? updatedProduct : p)
+            : { ...current, data: products.map((p: Product) => p._id === editingProduct._id ? updatedProduct : p) };
+        },
+        false // Don't revalidate immediately
+      );
+    }
+
     try {
       const method = editingProduct ? 'PUT' : 'POST';
       const url = editingProduct ? `/api/products/${editingProduct._id}` : '/api/products';
@@ -50,8 +74,15 @@ export default function ProductsPage() {
         body: JSON.stringify(data),
       });
 
-      if (!res.ok) throw new Error('Error saving product');
+      if (!res.ok) {
+        // Revert optimistic update on error
+        if (editingProduct?._id) {
+          mutate('/api/products');
+        }
+        throw new Error('Error saving product');
+      }
 
+      // Revalidate to get server state
       mutate('/api/products');
       setDialogOpen(false);
       setEditingProduct(null);
@@ -66,18 +97,9 @@ export default function ProductsPage() {
     setDialogOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
-    toast.promise(
-      async () => {
-         await fetch(`/api/products/${id}`, { method: 'DELETE' });
-         mutate('/api/products');
-      },
-      {
-        loading: 'Eliminando producto...',
-        success: 'Producto eliminado',
-        error: 'Error al eliminar el producto',
-      }
-    );
+  const handleDelete = async (product: Product) => {
+    if (!product._id) return;
+    await deleteProduct(product);
   };
 
   const handleShare = async (product: Product, share: boolean) => {
@@ -125,6 +147,7 @@ export default function ProductsPage() {
               </DialogDescription>
             </DialogHeader>
             <ProductForm 
+              key={editingProduct?._id || 'new'} 
               initialData={editingProduct || undefined} 
               onSubmit={handleFormSubmit}
             />
@@ -231,7 +254,7 @@ export default function ProductsPage() {
                       <Button variant="ghost" size="icon" onClick={() => handleEdit(product)} className="h-8 w-8 hover:text-primary">
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(product._id!)} className="h-8 w-8 hover:text-destructive">
+                      <Button variant="ghost" size="icon" onClick={() => handleDelete(product)} className="h-8 w-8 hover:text-destructive">
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>

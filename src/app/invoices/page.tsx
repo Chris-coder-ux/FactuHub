@@ -26,6 +26,7 @@ import {
   Mail, 
   FileEdit, 
   FileDown, 
+  FileText,
   Plus,
   RefreshCcw,
   Inbox
@@ -34,6 +35,8 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { Invoice } from '@/types';
 import { PaginatedResponse } from '@/lib/pagination';
+import { InvoicePDFPreview } from '@/components/invoices/InvoicePDFPreview';
+import { useInvoiceActions } from '@/hooks/useInvoiceActions';
 
 const getBadgeVariant = (status: string): "default" | "secondary" | "destructive" | "outline" | null => {
   const variants: Record<string, "default" | "secondary" | "destructive"> = {
@@ -99,6 +102,14 @@ export default function InvoicesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'invoice' | 'proforma'>('all');
   const [sortConfig, setSortConfig] = useState<{ key: keyof Invoice | 'client', direction: 'asc' | 'desc' } | null>(null);
+  const [previewInvoice, setPreviewInvoice] = useState<Invoice | null>(null);
+  
+  // Use invoice actions hook
+  const { sendEmail, downloadPDF, isSendingEmail, isDownloadingPDF } = useInvoiceActions({
+    onSuccess: () => {
+      mutate(); // Refresh invoice list
+    },
+  });
 
   const { data: invoicesData, isLoading, mutate } = useSWR<PaginatedResponse<Invoice>>(
     authStatus === 'authenticated' ? '/api/invoices' : null,
@@ -129,18 +140,7 @@ export default function InvoicesPage() {
   const handleSendEmail = async (invoice: Invoice) => {
     const email = prompt('Email del destinatario:', invoice.client?.email ?? '');
     if (email) {
-      toast.promise(
-        fetch(`/api/invoices/${invoice._id}/send-email`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email })
-        }),
-        {
-          loading: 'Enviando factura...',
-          success: 'Factura enviada correctamente',
-          error: 'Error al enviar la factura'
-        }
-      );
+      await sendEmail(invoice, email);
     }
   };
 
@@ -313,12 +313,19 @@ export default function InvoicesPage() {
                           <Button 
                             variant="ghost" 
                             size="icon" 
-                            onClick={async () => {
-                              const { generateInvoicePDF } = await import('@/lib/pdf-generator');
-                              generateInvoicePDF(invoice, null);
-                            }}
+                            onClick={() => setPreviewInvoice(invoice)}
+                            title="Vista Previa PDF"
+                            className="h-8 w-8 hover:text-blue-600"
+                          >
+                            <FileText size={16} />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => downloadPDF(invoice)}
                             title="Descargar PDF"
                             className="h-8 w-8 hover:text-emerald-600"
+                            disabled={isDownloadingPDF}
                           >
                             <FileDown size={16} />
                           </Button>
@@ -332,6 +339,15 @@ export default function InvoicesPage() {
           </TableBody>
         </Table>
       </motion.div>
+
+      {/* PDF Preview Dialog */}
+      {previewInvoice && (
+        <InvoicePDFPreview
+          invoice={previewInvoice}
+          open={!!previewInvoice}
+          onOpenChange={(open) => !open && setPreviewInvoice(null)}
+        />
+      )}
     </div>
   );
 }
