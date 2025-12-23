@@ -186,7 +186,20 @@ function setupQueryProfiling(): void {
 async function dbConnect() {
   // Validate MONGODB_URI at runtime (not during build)
   if (!MONGODB_URI) {
-    throw new Error('Please define the MONGODB_URI environment variable inside .env.local');
+    const errorMessage = [
+      '❌ MONGODB_URI no está configurado',
+      '',
+      'Por favor, configura MONGODB_URI en .env.local:',
+      '',
+      'Opción 1: MongoDB Atlas (Cloud - Recomendado)',
+      '  MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/facturahub',
+      '',
+      'Opción 2: MongoDB Local',
+      '  MONGODB_URI=mongodb://localhost:27017/facturahub',
+      '',
+      'Ver docs/MONGODB_WINDOWS_SETUP.md para más información.',
+    ].join('\n');
+    throw new Error(errorMessage);
   }
 
   if (cached.conn) {
@@ -196,12 +209,46 @@ async function dbConnect() {
   if (!cached.promise) {
     const opts = {
       bufferCommands: false,
+      serverSelectionTimeoutMS: 5000, // Timeout de 5 segundos
+      socketTimeoutMS: 45000,
     };
 
     cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
       // Setup query profiling after connection
       setupQueryProfiling();
+      logger.info('MongoDB connected successfully', {
+        database: mongoose.connection.db?.databaseName,
+      });
       return mongoose;
+    }).catch((error) => {
+      // Log detailed error for debugging
+      logger.error('MongoDB connection failed', {
+        error: error.message,
+        code: (error as any).code,
+        name: error.name,
+      });
+      
+      // Provide helpful error message
+      const helpfulMessage = [
+        '❌ Error al conectar a MongoDB:',
+        '',
+        `Error: ${error.message}`,
+        '',
+        'Posibles causas:',
+        '1. MongoDB no está corriendo (si es local)',
+        '2. MONGODB_URI incorrecto en .env.local',
+        '3. Firewall bloqueando la conexión',
+        '4. Credenciales incorrectas (si usa autenticación)',
+        '',
+        'Soluciones:',
+        '- Verifica que MongoDB está corriendo: Get-Service MongoDB (Windows)',
+        '- Verifica MONGODB_URI en .env.local',
+        '- Usa MongoDB Atlas (cloud) si no quieres instalar MongoDB localmente',
+        '',
+        'Ver docs/MONGODB_WINDOWS_SETUP.md para guía completa.',
+      ].join('\n');
+      
+      throw new Error(helpfulMessage);
     });
   }
 
