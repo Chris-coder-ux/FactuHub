@@ -72,6 +72,13 @@ Una plataforma completa de facturación web construida con Next.js, TypeScript, 
    NEXTAUTH_SECRET=tu-secreto-aqui
    NEXTAUTH_URL=http://localhost:3000
 
+   # Redis (para cola VeriFactu - opcional en desarrollo)
+   # Opción 1: Instalar Redis localmente o usar Docker
+   REDIS_URL=redis://localhost:6379
+   # Opción 2: Usar Upstash (cloud) incluso en desarrollo
+   # REDIS_URL=rediss://default:password@xxx.upstash.io:6379
+   # Si no configuras Redis, la cola usará modo in-memory (fallback)
+
    # Pagos
    STRIPE_PUBLISHABLE_KEY=pk_test_...
    STRIPE_SECRET_KEY=sk_test_...

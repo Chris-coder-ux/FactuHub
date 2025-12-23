@@ -92,6 +92,12 @@ Vercel te mostrará el progreso del despliegue en tiempo real:
 # Base de Datos MongoDB
 MONGODB_URI=mongodb+srv://usuario:password@cluster.mongodb.net/facturahub?retryWrites=true&w=majority
 
+# MongoDB Read Replicas (Opcional - Para mejorar performance de analytics)
+# Habilita read replicas para queries de solo lectura (analytics, reportes)
+MONGODB_USE_READ_REPLICAS=true
+# O usa una URI específica para read replicas:
+# MONGODB_READ_REPLICA_URI=mongodb+srv://usuario:password@cluster-replica.mongodb.net/facturahub?readPreference=secondaryPreferred
+
 # Autenticación NextAuth
 NEXTAUTH_SECRET=genera-un-secreto-seguro-aqui-minimo-32-caracteres
 NEXTAUTH_URL=https://tu-dominio.com
@@ -109,8 +115,21 @@ SENDGRID_API_KEY=SG.xxx...
 
 ```bash
 # Redis (Caching y Real-time)
+# Para cache y real-time (REST API)
 UPSTASH_REDIS_REST_URL=https://xxx.upstash.io
 UPSTASH_REDIS_REST_TOKEN=xxx
+
+# Para colas Bull (conexión Redis tradicional - REQUERIDO para VeriFactu queue)
+# Opción 1: URL completa (recomendado para Upstash)
+REDIS_URL=rediss://default:password@host:port
+# O para Upstash específicamente:
+UPSTASH_REDIS_URL=rediss://default:password@host:port
+
+# Opción 2: Variables individuales
+REDIS_HOST=xxx.upstash.io
+REDIS_PORT=6379
+REDIS_PASSWORD=tu-password
+REDIS_TLS=true  # Requerido para Upstash
 
 # Sentry (Monitoring)
 SENTRY_DSN=https://xxx@xxx.ingest.sentry.io/xxx
@@ -169,13 +188,21 @@ openssl rand -base64 32
 6. Obtén la connection string: `mongodb+srv://usuario:password@cluster.mongodb.net/facturahub`
 7. Agrega `MONGODB_URI` a las variables de entorno
 
-### 2. Upstash Redis (Caching y Real-time)
+### 2. Upstash Redis (Caching, Real-time y Colas)
 
 1. Ve a [upstash.com](https://upstash.com)
 2. Crea una cuenta gratuita
 3. Crea un nuevo Redis database
-4. Copia `UPSTASH_REDIS_REST_URL` y `UPSTASH_REDIS_REST_TOKEN`
-5. Agrega a las variables de entorno
+4. **Para Cache y Real-time (REST API)**:
+   - Copia `UPSTASH_REDIS_REST_URL` y `UPSTASH_REDIS_REST_TOKEN`
+   - Agrega a las variables de entorno
+5. **Para Colas Bull (VeriFactu queue - REQUERIDO)**:
+   - En el dashboard de Upstash, ve a tu Redis database
+   - Busca la sección "REST API" o "Redis CLI"
+   - Copia la **conexión Redis tradicional** (no REST)
+   - Formato: `rediss://default:password@host:port`
+   - Agrega como `REDIS_URL` o `UPSTASH_REDIS_URL`
+   - **Importante**: Bull necesita conexión Redis tradicional, no REST API
 
 ### 3. Stripe (Pagos)
 
@@ -380,6 +407,58 @@ npm install
 npm run build
 pm2 restart facturahub
 ```
+
+---
+
+## 📊 MongoDB Read Replicas (Opcional)
+
+Para mejorar el rendimiento de queries de analytics y reportes, puedes configurar read replicas en MongoDB Atlas.
+
+### Configuración en MongoDB Atlas
+
+1. **Crear Read Replicas**:
+   - Ve a tu cluster en MongoDB Atlas
+   - En "Configuration" → "Replica Set", asegúrate de tener al menos 1 replica
+   - MongoDB Atlas crea read replicas automáticamente en clusters M10+
+
+2. **Obtener Connection String**:
+   - Ve a "Database Access" → "Connect"
+   - Copia la connection string
+   - Agrega `?readPreference=secondaryPreferred` al final
+
+### Configuración en la Aplicación
+
+**Opción 1: Habilitar Read Preference (Recomendado)**
+```bash
+# En .env.local o variables de entorno de Vercel
+MONGODB_USE_READ_REPLICAS=true
+```
+
+**Opción 2: URI Específica para Read Replicas**
+```bash
+# Si tienes un cluster separado para read replicas
+MONGODB_READ_REPLICA_URI=mongodb+srv://usuario:password@cluster-replica.mongodb.net/facturahub?readPreference=secondaryPreferred
+```
+
+### Queries que Usan Read Replicas
+
+Las siguientes queries automáticamente usan read replicas cuando están configuradas:
+- `/api/analytics` - Todas las queries de analytics
+- `/api/reports` - Todas las queries de reportes
+- Cualquier query de solo lectura (find, aggregate, countDocuments)
+
+### Beneficios
+
+- ✅ Reduce carga en el servidor principal
+- ✅ Mejora latencia de queries de analytics
+- ✅ Escalabilidad horizontal para lecturas
+- ✅ No afecta escrituras (siempre usan primary)
+
+### Notas Importantes
+
+- ⚠️ Read replicas pueden tener lag de replicación (típicamente <1 segundo)
+- ⚠️ No usar read replicas para queries que requieren consistencia fuerte
+- ⚠️ Escrituras siempre van al primary (no se ven afectadas)
 
 ---
 
