@@ -8,7 +8,7 @@ export interface ForecastingData {
   monthsOfData: number;
 }
 
-export async function generateIVAProjections(userId: string, year: number): Promise<IFiscalProjection[]> {
+export async function generateIVAProjections(userId: string, year: number): Promise<Omit<IFiscalProjection, keyof Document>[]> {
   const data = await getHistoricalData(userId);
 
   const projections: IFiscalProjection[] = [];
@@ -35,10 +35,17 @@ export async function generateIVAProjections(userId: string, year: number): Prom
     projections.push(projection);
   }
 
-  // Save projections
-  await FiscalProjection.insertMany(projections);
-
-  return projections;
+  // Don't save here - let the route handler save with proper companyId
+  // Return plain objects instead of Mongoose documents
+  return projections.map(p => ({
+    userId: p.userId as any, // Will be converted to ObjectId in route handler
+    year: p.year,
+    quarter: p.quarter,
+    type: p.type,
+    projectedAmount: p.projectedAmount,
+    confidence: p.confidence,
+    basedOnData: p.basedOnData,
+  })) as any;
 }
 
 function calculateIVAByRates(data: ForecastingData, quarter: number): number {
@@ -50,7 +57,7 @@ function calculateIVAByRates(data: ForecastingData, quarter: number): number {
   return (rate21 + rate10 + rate4) * 3; // 3 months per quarter
 }
 
-export async function generateIRPFProjection(userId: string, year: number): Promise<IFiscalProjection> {
+export async function generateIRPFProjection(userId: string, year: number): Promise<Omit<IFiscalProjection, keyof Document>> {
   const data = await getHistoricalData(userId);
 
   // Rough IRPF estimation: 20% of annual revenue for autónomos
@@ -58,10 +65,12 @@ export async function generateIRPFProjection(userId: string, year: number): Prom
   const projectedIRPF = estimatedAnnualRevenue * 0.20; // Simplified
   const confidence = Math.min(data.monthsOfData / 24, 0.7); // Needs more historical data
 
-  const projection = new FiscalProjection({
-    userId,
+  // Don't save here - let the route handler save with proper companyId
+  // Return plain object instead of Mongoose document
+  return {
+    userId: userId as any, // Will be converted to ObjectId in route handler
     year,
-    type: 'irpf',
+    type: 'irpf' as const,
     projectedAmount: projectedIRPF,
     confidence,
     basedOnData: {
@@ -69,10 +78,7 @@ export async function generateIRPFProjection(userId: string, year: number): Prom
       averageMonthlyRevenue: data.averageMonthlyRevenue,
       taxRate: 0.20,
     },
-  });
-
-  await projection.save();
-  return projection;
+  } as any;
 }
 
 async function getHistoricalData(userId: string): Promise<ForecastingData> {

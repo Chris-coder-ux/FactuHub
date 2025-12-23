@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import { NoCompanyBanner } from '@/components/NoCompanyBanner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import MaterializedViewsSettings from '@/components/analytics/MaterializedViewsSettings';
 
 const COLORS = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
@@ -434,6 +435,9 @@ export default function AnalyticsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Materialized Views Settings */}
+      <MaterializedViewsSettings />
     </div>
   );
 }

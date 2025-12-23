@@ -21,6 +21,8 @@ import { InvoiceVeriFactuSection } from './invoice/InvoiceVeriFactuSection';
 import { InvoiceFormDetailed } from './invoice/InvoiceFormDetailed';
 import { InvoiceFormData } from './invoice/types';
 import { debounce } from './invoice/utils';
+import { useFormAutoSave } from '@/hooks/useFormAutoSave';
+import { useSWRConfig } from 'swr';
 
 interface InvoiceFormProps {
   readonly initialData?: Readonly<Partial<Invoice>>;
@@ -28,8 +30,9 @@ interface InvoiceFormProps {
   readonly templateData?: any; // Datos de plantilla aplicada
 }
 
-export function InvoiceForm({ initialData, isEditing = false, templateData }: InvoiceFormProps) {
+function InvoiceFormComponent({ initialData, isEditing = false, templateData }: InvoiceFormProps) {
   const router = useRouter();
+  const { mutate: mutateGlobal } = useSWRConfig();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
@@ -85,16 +88,17 @@ export function InvoiceForm({ initialData, isEditing = false, templateData }: In
 
   const watchedItems = watch("items") || [];
 
-  // Auto-save to localStorage
-  const saveToLocalStorage = useCallback(
-    (data: any) => {
-      const debouncedSave = debounce((d: any) => {
-        localStorage.setItem(`invoice-draft-${isEditing ? initialData?._id : 'new'}`, JSON.stringify(d));
+  // Auto-save to localStorage using custom hook
+  const { loadFromLocalStorage, clearSavedData, lastSaved: autoSavedTime } = useFormAutoSave(
+    watch,
+    {
+      formKey: `invoice-draft-${isEditing ? initialData?._id : 'new'}`,
+      enabled: !isEditing || !initialData, // Only auto-save drafts, not when editing existing invoices
+      debounceMs: 1000,
+      onSave: (data) => {
         setLastSaved(new Date().toLocaleTimeString());
-      }, 1000);
-      debouncedSave(data);
-    },
-    [isEditing, initialData?._id]
+      },
+    }
   );
 
   // Load from template or localStorage
@@ -117,27 +121,18 @@ export function InvoiceForm({ initialData, isEditing = false, templateData }: In
       }
     } else {
       // Load from localStorage
-      const saved = localStorage.getItem(`invoice-draft-${isEditing ? initialData?._id : 'new'}`);
+      const saved = loadFromLocalStorage();
       if (saved && !initialData) {
         try {
-          const parsed = JSON.parse(saved);
-          Object.keys(parsed).forEach(key => {
-            setValue(key as any, parsed[key]);
+          Object.keys(saved).forEach(key => {
+            setValue(key as any, saved[key as keyof typeof saved]);
           });
         } catch (error) {
           logger.error('Error loading draft', error);
         }
       }
     }
-  }, [templateData, setValue, isEditing, initialData]);
-
-  // Watch for changes and auto-save
-  useEffect(() => {
-    const subscription = watch((data) => {
-      saveToLocalStorage(data);
-    });
-    return () => subscription.unsubscribe();
-  }, [watch, saveToLocalStorage]);
+  }, [templateData, setValue, isEditing, initialData, loadFromLocalStorage]);
 
   // Calculate totals
   const subtotal = watchedItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
@@ -146,6 +141,37 @@ export function InvoiceForm({ initialData, isEditing = false, templateData }: In
 
   const onSubmit = async (data: InvoiceFormData) => {
     setIsSubmitting(true);
+    
+    const invoicePayload = {
+      ...data,
+      subtotal,
+      tax: totalTax,
+      total
+    };
+
+    // Optimistic update for editing existing invoice
+    if (isEditing && initialData?._id) {
+      const updatedInvoice = { ...initialData, ...invoicePayload } as unknown as Invoice;
+      
+      mutateInvoice(
+        updatedInvoice,
+        false // Don't revalidate immediately
+      );
+
+      // Also update in the list
+      mutateGlobal(
+        '/api/invoices',
+        (current: any) => {
+          if (!current) return current;
+          const data = Array.isArray(current) ? current : current.data || [];
+          return Array.isArray(current)
+            ? data.map((inv: Invoice) => inv._id === initialData._id ? updatedInvoice : inv)
+            : { ...current, data: data.map((inv: Invoice) => inv._id === initialData._id ? updatedInvoice : inv) };
+        },
+        false
+      );
+    }
+
     try {
       const url = isEditing ? `/api/invoices/${initialData?._id}` : '/api/invoices';
       const method = isEditing ? 'PATCH' : 'POST';
@@ -153,12 +179,7 @@ export function InvoiceForm({ initialData, isEditing = false, templateData }: In
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...data,
-          subtotal,
-          tax: totalTax,
-          total
-        }),
+        body: JSON.stringify(invoicePayload),
       });
 
       if (!response.ok) {
@@ -167,11 +188,24 @@ export function InvoiceForm({ initialData, isEditing = false, templateData }: In
       }
 
       const result = await response.json();
+      
+      // Revalidate to get server state
+      if (isEditing) {
+        mutateInvoice();
+        mutateGlobal('/api/invoices');
+      }
+
       toast.success(isEditing ? 'Factura actualizada correctamente' : 'Factura creada correctamente');
-      localStorage.removeItem(`invoice-draft-${isEditing ? initialData?._id : 'new'}`);
+      clearSavedData(); // Use hook method to clear saved data
       router.push('/invoices');
       router.refresh();
     } catch (error) {
+      // Revert optimistic update on error
+      if (isEditing && initialData?._id) {
+        mutateInvoice();
+        mutateGlobal('/api/invoices');
+      }
+      
       toast.error(error instanceof Error ? error.message : 'Ocurrió un error al guardar la factura');
       logger.error('Submit error', error);
     } finally {
@@ -217,7 +251,7 @@ export function InvoiceForm({ initialData, isEditing = false, templateData }: In
 
       setLastSaved(new Date().toLocaleTimeString());
       toast.success('Borrador guardado');
-      localStorage.removeItem(`invoice-draft-${isEditing ? initialData?._id : 'new'}`);
+      clearSavedData(); // Use hook method to clear saved data
     } catch (error) {
       toast.error('Error guardando borrador');
     } finally {
@@ -293,3 +327,29 @@ export function InvoiceForm({ initialData, isEditing = false, templateData }: In
     </div>
   );
 }
+
+// Memoize InvoiceForm to prevent unnecessary re-renders
+// Only re-render if initialData or isEditing changes
+export const InvoiceForm = React.memo(InvoiceFormComponent, (prevProps, nextProps) => {
+  // Compare isEditing (primitive)
+  if (prevProps.isEditing !== nextProps.isEditing) return false;
+  
+  // Compare initialData by reference (if same object, no need to re-render)
+  if (prevProps.initialData !== nextProps.initialData) {
+    // Deep comparison only if references differ
+    if (!prevProps.initialData || !nextProps.initialData) return false;
+    
+    // Compare key fields that would affect form rendering
+    const prevId = prevProps.initialData._id;
+    const nextId = nextProps.initialData._id;
+    if (prevId !== nextId) return false;
+    
+    // If IDs match, assume it's the same invoice (reference check is sufficient)
+    // For new invoices, initialData will be undefined or different reference
+  }
+  
+  // Compare templateData by reference
+  if (prevProps.templateData !== nextProps.templateData) return false;
+  
+  return true;
+});
