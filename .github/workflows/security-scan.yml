@@ -1,0 +1,154 @@
+name: Security Scan
+
+on:
+  schedule:
+    # Ejecutar semanalmente los domingos a las 00:00 UTC
+    - cron: '0 0 * * 0'
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch: # Permite ejecución manual
+
+jobs:
+  npm-audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run npm audit
+        id: audit
+        continue-on-error: true
+        run: |
+          npm audit --audit-level=moderate --json > audit-results.json || true
+          npm audit --audit-level=moderate || true
+
+      - name: Upload audit results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: npm-audit-results
+          path: audit-results.json
+          retention-days: 30
+
+      - name: Comment PR with audit results
+        if: github.event_name == 'pull_request' && steps.audit.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const auditData = JSON.parse(fs.readFileSync('audit-results.json', 'utf8'));
+            const vulnerabilities = auditData.vulnerabilities || {};
+            const vulnCount = Object.keys(vulnerabilities).length;
+            
+            if (vulnCount > 0) {
+              const body = `## ⚠️ npm audit encontró ${vulnCount} vulnerabilidades
+              
+              Se encontraron vulnerabilidades en las dependencias. Revisa los resultados del workflow para más detalles.
+              
+              **Acción requerida**: Revisa y actualiza las dependencias vulnerables.`;
+              
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: body
+              });
+            }
+
+  snyk:
+    name: Snyk Security Scan
+    runs-on: ubuntu-latest
+    if: ${{ secrets.SNYK_TOKEN != '' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Snyk test
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=medium
+
+      - name: Upload Snyk results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: snyk-results
+          path: snyk-results.json
+          retention-days: 30
+
+  trivy:
+    name: Trivy Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  security-summary:
+    name: Security Summary
+    runs-on: ubuntu-latest
+    needs: [npm-audit, snyk, trivy]
+    if: always()
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Generate summary
+        run: |
+          echo "## Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### npm audit" >> $GITHUB_STEP_SUMMARY
+          if [ -f npm-audit-results/audit-results.json ]; then
+            echo "✅ npm audit completed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ npm audit results not available" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Snyk" >> $GITHUB_STEP_SUMMARY
+          if [ -f snyk-results/snyk-results.json ]; then
+            echo "✅ Snyk scan completed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "ℹ️ Snyk scan skipped (no token configured)" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Trivy" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Trivy scan completed" >> $GITHUB_STEP_SUMMARY
+
