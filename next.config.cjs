@@ -60,19 +60,16 @@ const nextConfig = {
     }
     
     // Suprimir warnings conocidos de Sentry/OpenTelemetry
+    const originalWarnings = config.ignoreWarnings || [];
     config.ignoreWarnings = [
-      ...(config.ignoreWarnings || []),
+      ...originalWarnings,
       // Warning de require-in-the-middle (usado por Sentry para instrumentación)
-      {
-        module: /node_modules\/require-in-the-middle/,
-      },
-      {
-        message: /Critical dependency: require function is used in a way in which dependencies cannot be statically extracted/,
-      },
+      // Este warning es inofensivo - Sentry necesita acceso dinámico a módulos
+      /node_modules\/require-in-the-middle/,
+      /Critical dependency.*require function is used in a way/,
       // Otros warnings comunes de módulos de instrumentación
-      {
-        module: /node_modules\/@sentry/,
-      },
+      /node_modules\/@sentry/,
+      /node_modules\/@opentelemetry/,
     ];
     
     return config;
