@@ -27,9 +27,20 @@ async function generateIcons(sourceImage: string) {
       process.exit(1);
     }
 
-    if (!existsSync(sourceImage)) {
-      console.error(`❌ Error: No se encontró la imagen: ${sourceImage}`);
-      process.exit(1);
+    // Si no se proporciona imagen, usar el placeholder SVG
+    let imagePath = sourceImage;
+    if (!sourceImage || !existsSync(sourceImage)) {
+      const placeholderPath = join(process.cwd(), 'public', 'icons', 'icon-placeholder.svg');
+      if (existsSync(placeholderPath)) {
+        console.log('📝 No se encontró la imagen especificada. Usando placeholder SVG...\n');
+        imagePath = placeholderPath;
+      } else {
+        console.error(`❌ Error: No se encontró la imagen: ${sourceImage}`);
+        console.log('\n💡 Opciones:');
+        console.log('   1. Proporciona una imagen: npm run pwa:icons ./ruta/a/logo.png');
+        console.log('   2. Usa una herramienta online: https://www.pwabuilder.com/imageGenerator');
+        process.exit(1);
+      }
     }
 
     const outputDir = join(process.cwd(), 'public', 'icons');
@@ -41,7 +52,8 @@ async function generateIcons(sourceImage: string) {
     for (const size of sizes) {
       const outputPath = join(outputDir, `icon-${size}x${size}.png`);
       
-      await sharp.default(sourceImage)
+      // Sharp maneja SVG automáticamente
+      await sharp.default(imagePath)
         .resize(size, size, {
           fit: 'cover',
           position: 'center',
@@ -65,16 +77,13 @@ async function generateIcons(sourceImage: string) {
 if (require.main === module) {
   const sourceImage = process.argv[2];
   
+  // Si no se proporciona imagen, usar placeholder
   if (!sourceImage) {
-    console.error('❌ Error: Debes proporcionar la ruta a la imagen fuente.');
-    console.log('\n📖 Uso:');
-    console.log('   npm run pwa:icons <ruta-a-imagen.png>');
-    console.log('\n💡 Ejemplo:');
-    console.log('   npm run pwa:icons ./assets/logo.png');
-    process.exit(1);
+    console.log('📝 No se proporcionó imagen. Usando placeholder SVG...\n');
+    generateIcons('');
+  } else {
+    generateIcons(sourceImage);
   }
-
-  generateIcons(sourceImage);
 }
 
 export { generateIcons };
